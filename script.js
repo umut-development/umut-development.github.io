@@ -162,6 +162,7 @@ function addProject() {
   const fileEl   = document.getElementById("p-file");
   const videoUrl = document.getElementById("p-video-url").value.trim();
   const videoFile= document.getElementById("p-video-file").files[0];
+  const codeFile = document.getElementById("p-code").files[0];
 
   if (!selectedCat)                             { showToast("Lütfen ana kategori seç!", "error"); return; }
   if (selectedCat === "web" && !selectedSubCat) { showToast("Lütfen alt kategori seç!", "error"); return; }
@@ -179,7 +180,18 @@ function addProject() {
 
   showToast("Proje yükleniyor... ⏳", "info");
 
-  Promise.all([readImg, readVid]).then(([img, vid]) => {
+  
+  const readCode = codeFile
+  ? new Promise(res => {
+      const r = new FileReader();
+      const isText = /\.(py|ino|js|ts|cpp|c|h|java|html|css|json|txt|md)$/i.test(codeFile.name);
+      r.onload = e => res({ data: e.target.result, name: codeFile.name, isText });
+      if (isText) r.readAsText(codeFile);
+      else        r.readAsDataURL(codeFile);
+    })
+  : Promise.resolve(null);
+
+Promise.all([readImg, readVid, readCode]).then(([img, vid, code]) => {
     saveProjectToFirestore({
       title, desc,
       fileData:  img ? img.data : null,
@@ -187,6 +199,9 @@ function addProject() {
       videoUrl:  videoMode === "url" ? videoUrl : null,
       videoData: vid ? vid.data : null,
       videoType: vid ? vid.type : null,
+      codeData:   code ? code.data   : null,
+codeName:   code ? code.name   : null,
+codeIsText: code ? code.isText : false,
     });
   });
 }
@@ -204,6 +219,7 @@ async function saveProjectToFirestore(p) {
     ["p-title","p-desc","p-video-url"].forEach(id => document.getElementById(id).value = "");
     document.getElementById("p-file").value = "";
     document.getElementById("p-video-file").value = "";
+    document.getElementById("p-code").value = "";
 
     await loadProjectsFromFirestore();
     renderAdminProjectList();
@@ -266,6 +282,7 @@ function renderProjects() {
           </div>
           <div class="card-title">${p.title}</div>
           <div class="card-desc">${p.desc || "Açıklama eklenmedi."}</div>
+          ${p.codeData ? `<button class="btn btn-outline btn-sm" style="margin-top:0.8rem;width:100%" onclick="showCodeModal('${p.id}')"><i class="fas fa-code"></i> Kodu Görüntüle (${p.codeName || 'kaynak kodu'})</button>` : ''}
         </div>
       </div>`;
   }).join("");
@@ -392,6 +409,51 @@ function closeMobileMenu() {
   btn.classList.remove("open");
   document.body.style.overflow = "";
 }
+
+function showCodeModal(projectId) {
+  const p = projects.find(pr => pr.id === projectId);
+  if (!p || !p.codeData) return;
+  document.getElementById("code-modal-title").textContent = p.title + " — " + (p.codeName || "Kaynak Kodu");
+  const body = document.getElementById("code-modal-body");
+  if (p.codeIsText) {
+    body.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.8rem;flex-wrap:wrap;gap:0.5rem;">
+        <span style="font-size:0.82rem;color:var(--text-muted)"><i class="fas fa-file-code"></i> ${p.codeName || "kaynak_kodu"}</span>
+        <button class="btn btn-primary btn-sm" onclick="downloadCode('${p.id}')"><i class="fas fa-download"></i> İndir</button>
+      </div>
+      <pre style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:1.2rem;overflow:auto;font-size:0.82rem;line-height:1.7;max-height:60vh;white-space:pre-wrap;word-break:break-all;"><code>${escapeHtml(p.codeData)}</code></pre>`;
+  } else {
+    body.innerHTML = `
+      <div style="text-align:center;padding:2rem;">
+        <i class="fas fa-file-archive" style="font-size:3rem;color:var(--blue-primary);margin-bottom:1rem;display:block"></i>
+        <p style="font-weight:600;margin-bottom:0.4rem">${p.codeName || "kaynak_kodu.zip"}</p>
+        <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:1.5rem">Bu dosya görüntülenemiyor, indirerek açabilirsin.</p>
+        <button class="btn btn-primary" onclick="downloadCode('${p.id}')"><i class="fas fa-download"></i> Dosyayı İndir</button>
+      </div>`;
+  }
+  openModal("code-modal");
+}
+
+function downloadCode(projectId) {
+  const p = projects.find(pr => pr.id === projectId);
+  if (!p || !p.codeData) return;
+  const a = document.createElement("a");
+  if (p.codeIsText) {
+    const blob = new Blob([p.codeData], {type:"text/plain"});
+    a.href = URL.createObjectURL(blob);
+  } else {
+    a.href = p.codeData;
+  }
+  a.download = p.codeName || "kaynak_kodu";
+  a.click();
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+window.showCodeModal = showCodeModal;
+window.downloadCode  = downloadCode;
 
 window.toggleMobileMenu = toggleMobileMenu;
 window.closeMobileMenu  = closeMobileMenu;
