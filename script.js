@@ -11,6 +11,9 @@ import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged }
 import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, query, orderBy }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
+const CLOUDINARY_CLOUD = "dhfbwzn9t";
+const CLOUDINARY_PRESET = "umut_dev_uploads";
+
 const firebaseConfig = {
   apiKey:            "AIzaSyBukmAgWtI3KrIrN4PgJHdO0W6a92fyzzQ",   // kendi değerini yaz
   authDomain:        "umut-development.firebaseapp.com",   // kendi değerini yaz
@@ -156,79 +159,104 @@ function selectAdminSubCat(sub, btn) {
   btn.classList.add("selected");
 }
 
-function addProject() {
-  const title    = document.getElementById("p-title").value.trim();
-  const desc     = document.getElementById("p-desc").value.trim();
-  const fileEl   = document.getElementById("p-file");
-  const videoUrl = document.getElementById("p-video-url").value.trim();
-  const videoFile= document.getElementById("p-video-file").files[0];
-  const codeFile = document.getElementById("p-code").files[0];
+async function uploadToCloudinary(file, resourceType = "auto") {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("upload_preset", CLOUDINARY_PRESET);
+  const res = await fetch(
+    `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/${resourceType}/upload`,
+    { method: "POST", body: formData }
+  );
+  if (!res.ok) throw new Error("Cloudinary yükleme başarısız!");
+  const data = await res.json();
+  return data.secure_url;
+}
+
+async function addProject() {
+  const title     = document.getElementById("p-title").value.trim();
+  const desc      = document.getElementById("p-desc").value.trim();
+  const imgFile   = document.getElementById("p-file").files[0];
+  const videoUrl  = document.getElementById("p-video-url").value.trim();
+  const videoFile = document.getElementById("p-video-file").files[0];
+  const codeFile  = document.getElementById("p-code").files[0];
 
   if (!selectedCat)                             { showToast("Lütfen ana kategori seç!", "error"); return; }
   if (selectedCat === "web" && !selectedSubCat) { showToast("Lütfen alt kategori seç!", "error"); return; }
   if (!title)                                   { showToast("Başlık boş olamaz!", "error"); return; }
 
-  const imgFile = fileEl.files[0];
-
-  const readImg = imgFile
-    ? new Promise(res => { const r = new FileReader(); r.onload = e => res({data:e.target.result, type:imgFile.type}); r.readAsDataURL(imgFile); })
-    : Promise.resolve(null);
-
-  const readVid = (videoMode === "file" && videoFile)
-    ? new Promise(res => { const r = new FileReader(); r.onload = e => res({data:e.target.result, type:videoFile.type}); r.readAsDataURL(videoFile); })
-    : Promise.resolve(null);
-
   showToast("Proje yükleniyor... ⏳", "info");
 
-  
-  const readCode = codeFile
-  ? new Promise(res => {
-      const r = new FileReader();
-      const isText = /\.(py|ino|js|ts|cpp|c|h|java|html|css|json|txt|md)$/i.test(codeFile.name);
-      r.onload = e => res({ data: e.target.result, name: codeFile.name, isText });
-      if (isText) r.readAsText(codeFile);
-      else        r.readAsDataURL(codeFile);
-    })
-  : Promise.resolve(null);
-
-Promise.all([readImg, readVid, readCode]).then(([img, vid, code]) => {
-    saveProjectToFirestore({
-      title, desc,
-      fileData:  img ? img.data : null,
-      fileType:  img ? img.type : null,
-      videoUrl:  videoMode === "url" ? videoUrl : null,
-      videoData: vid ? vid.data : null,
-      videoType: vid ? vid.type : null,
-      codeData:   code ? code.data   : null,
-codeName:   code ? code.name   : null,
-codeIsText: code ? code.isText : false,
-    });
-  });
-}
-
-async function saveProjectToFirestore(p) {
   try {
-    await addDoc(collection(db, "projects"), {
-      ...p,
-      cat:       selectedCat,
-      subCat:    selectedSubCat,
-      date:      new Date().toLocaleDateString("tr-TR", {year:"numeric",month:"long",day:"numeric"}),
-      timestamp: Date.now()
-    });
+    let fileUrl  = null;
+    let vidUrl   = null;
+    let codeData = null;
+    let codeName = null;
+    let codeIsText = false;
 
-    ["p-title","p-desc","p-video-url"].forEach(id => document.getElementById(id).value = "");
-    document.getElementById("p-file").value = "";
-    document.getElementById("p-video-file").value = "";
-    document.getElementById("p-code").value = "";
+    if (imgFile) {
+      showToast("Görsel yükleniyor... ⏳", "info");
+      fileUrl = await uploadToCloudinary(imgFile, "image");
+    }
 
-    await loadProjectsFromFirestore();
-    renderAdminProjectList();
-    showToast("Proje başarıyla eklendi! 🎉", "success");
+    if (videoMode === "file" && videoFile) {
+      showToast("Video yükleniyor, lütfen bekle... ⏳", "info");
+      vidUrl = await uploadToCloudinary(videoFile, "video");
+    }
+
+    if (codeFile) {
+      codeName = codeFile.name;
+      const isText = /\.(py|ino|js|ts|cpp|c|h|java|html|css|json|txt|md)$/i.test(codeFile.name);
+      codeIsText = isText;
+      if (isText) {
+        codeData = await new Promise(res => {
+          const r = new FileReader();
+          r.onload = e => res(e.target.result);
+          r.readAsText(codeFile);
+        });
+      } else {
+        codeData = await uploadToCloudinary(codeFile, "raw");
+      }
+    }
+
+    await saveProjectToFirestore({
+      fileUrl,
+      videoUrl: videoMode === "url" ? videoUrl : null,
+      vidUrl,
+      codeData,
+      codeName,
+      codeIsText,
+    }, title, desc);
 
   } catch(e) {
-    console.error("Firestore kayıt hatası:", e);
-    showToast("Proje kaydedilemedi: " + e.message, "error");
+    console.error("Yükleme hatası:", e);
+    showToast("Yükleme başarısız: " + e.message, "error");
   }
+}
+
+async function saveProjectToFirestore(media, title, desc) {
+  await addDoc(collection(db, "projects"), {
+    title,
+    desc,
+    fileUrl:    media.fileUrl    || null,
+    videoUrl:   media.videoUrl   || null,
+    vidUrl:     media.vidUrl     || null,
+    codeData:   media.codeData   || null,
+    codeName:   media.codeName   || null,
+    codeIsText: media.codeIsText || false,
+    cat:        selectedCat,
+    subCat:     selectedSubCat,
+    date:       new Date().toLocaleDateString("tr-TR", {year:"numeric", month:"long", day:"numeric"}),
+    timestamp:  Date.now()
+  });
+
+  ["p-title","p-desc","p-video-url"].forEach(id => document.getElementById(id).value = "");
+  document.getElementById("p-file").value = "";
+  document.getElementById("p-video-file").value = "";
+  document.getElementById("p-code").value = "";
+
+  await loadProjectsFromFirestore();
+  renderAdminProjectList();
+  showToast("Proje başarıyla eklendi! 🎉", "success");
 }
 
 async function loadProjectsFromFirestore() {
@@ -258,15 +286,15 @@ function renderProjects() {
   }
 
   grid.innerHTML = filtered.map(p => {
-    let media = `<i class="fas fa-code"></i>`;
-    if (p.videoData) {
-      media = `<video src="${p.videoData}" controls muted playsinline style="width:100%;height:100%;object-fit:cover;border-radius:0"></video>`;
-    } else if (p.videoUrl) {
-      const ytId = extractYoutubeId(p.videoUrl);
-      if (ytId) media = `<iframe src="https://www.youtube.com/embed/${ytId}" style="width:100%;height:100%;border:none" allowfullscreen loading="lazy"></iframe>`;
-    } else if (p.fileData && p.fileType && p.fileType.startsWith("image")) {
-      media = `<img src="${p.fileData}" alt="${p.title}" style="width:100%;height:100%;object-fit:cover;border-radius:0"/>`;
-    }
+  let media = `<i class="fas fa-code"></i>`;
+if (p.vidUrl) {
+  media = `<video src="${p.vidUrl}" controls muted playsinline style="width:100%;height:100%;object-fit:cover;border-radius:0"></video>`;
+} else if (p.videoUrl) {
+  const ytId = extractYoutubeId(p.videoUrl);
+  if (ytId) media = `<iframe src="https://www.youtube.com/embed/${ytId}" style="width:100%;height:100%;border:none" allowfullscreen loading="lazy"></iframe>`;
+} else if (p.fileUrl) {
+  media = `<img src="${p.fileUrl}" alt="${p.title}" style="width:100%;height:100%;object-fit:cover;border-radius:0"/>`;
+}
 
     const labels  = {iot:"🔌 IoT","web-full":"🌐 Web Sitesi","web-loading":"⏳ Yüklenme","web-login":"🔑 Giriş Ekranı"};
     const catKey   = p.cat === "iot" ? "iot" : p.subCat;
