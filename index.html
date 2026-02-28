@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Umut Development</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<!-- Toast bildirimleri buraya eklenir -->
+<div id="toast-container"></div>
+
+<!-- ===== NAVBAR ===== -->
+<nav id="navbar">
+  <!-- Logo + marka adı -->
+  <div class="nav-logo">
+    <img src="logo.png" alt="Umut Development Logo"/>
+    Umut Development
+  </div>
+
+  <!-- Masaüstü link listesi -->
+  <div class="nav-links">
+    <a href="#hero">Ana Sayfa</a>
+    <a href="#about">Hakkımda</a>
+    <a href="#projects">Projeler</a>
+    <a href="#contact">İletişim</a>
+    <button class="btn btn-primary btn-sm" onclick="openModal('login-modal')">
+      <i class="fas fa-lock"></i> Admin
+    </button>
+  </div>
+
+  <!-- Hamburger butonu — sadece mobilde görünür -->
+  <button class="hamburger" id="hamburger" onclick="toggleMobileMenu()" aria-label="Menüyü aç/kapat">
+    <span></span>
+    <span></span>
+    <span></span>
+  </button>
+</nav>
+
+<!-- ===== MOBİL MENÜ OVERLAY ===== -->
+<div class="mobile-menu" id="mobile-menu">
+  <a href="#hero"     onclick="closeMobileMenu()">Ana Sayfa</a>
+  <a href="#about"    onclick="closeMobileMenu()">Hakkımda</a>
+  <a href="#projects" onclick="closeMobileMenu()">Projeler</a>
+  <a href="#contact"  onclick="closeMobileMenu()">İletişim</a>
+  <button class="btn btn-primary" onclick="closeMobileMenu(); openModal('login-modal')">
+    <i class="fas fa-lock"></i> Admin Girişi
+  </button>
+</div>
+
+<!-- ===== HERO ===== -->
+<section id="hero">
+  <!-- Hero logosunu büyük ve parlak göster -->
+  <img class="hero-logo" src="logo.png" alt="UD Logo"/>
+  <div class="hero-tag">✦ Yazılım &amp; Geliştirme</div>
+  <h1 class="hero-title">Umut<br/><span>Development</span></h1>
+  <p class="hero-sub">IoT projeleri, web tasarımları ve yazılım içerikleriyle dolu portfolio'ya hoş geldiniz.</p>
+  <div class="hero-btns">
+    <a href="#projects" class="btn btn-primary"><i class="fas fa-folder-open"></i> Projeleri İncele</a>
+    <a href="#contact" class="btn btn-outline"><i class="fas fa-envelope"></i> İletişime Geç</a>
+  </div>
+</section>
+
+<!-- ===== HAKKIMDA ===== -->
+<section id="about">
+  <div class="section">
+    <div class="about-grid">
+      <div class="about-img-wrap">
+        <!-- Siyah arka planlı kutu içinde logo gösterilir -->
+        <div class="about-avatar">
+          <img src="logo.png" alt="Umut Development"/>
+        </div>
+        <div class="about-badge">
+          <strong>∞</strong>
+          <div>
+            <div style="font-size:0.8rem;font-weight:700">Projeler</div>
+            <span>Sürekli gelişiyor</span>
+          </div>
+        </div>
+      </div>
+      <div class="about-text">
+        <p class="section-label">Hakkımda</p>
+        <h3>Merhaba, ben Umut 👋</h3>
+        <p>Yazılım geliştirme tutkumla IoT projeleri ve web tasarımı üzerine çalışıyorum. Instagram'da yazılımla ilgili içerikler paylaşıyorum, burada da projelerimi detaylıca inceleyebilirsin.</p>
+        <p>Her projede kullandığım teknolojileri, süreçleri ve öğrendiklerimi aktarmaya çalışıyorum.</p>
+        <a href="https://instagram.com/" target="_blank" class="btn btn-primary" style="margin-top:1rem">
+          <i class="fab fa-instagram"></i> Instagram'ı Takip Et
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== PROJELER ===== -->
+<section id="projects" style="padding:90px 5vw;">
+  <div class="section-header">
+    <p class="section-label">Portfolio</p>
+    <h2 class="section-title">Projelerim</h2>
+    <p class="section-desc">Kategoriye tıklayarak filtrele, her proje kronolojik sırada listelenir.</p>
+  </div>
+  <!-- Ana kategori sekmeleri -->
+  <div class="cat-tabs">
+    <button class="cat-tab active" onclick="filterCat('all', this)">Tümü</button>
+    <button class="cat-tab" onclick="filterCat('iot', this)">🔌 IoT Projeleri</button>
+    <button class="cat-tab" onclick="filterCat('web', this)">🌐 Web Projeleri</button>
+  </div>
+  <!-- Web alt kategorileri — Web seçilince açılır -->
+  <div id="sub-cats">
+    <button class="sub-tab active" onclick="filterSubCat('web-all', this)">Tümü</button>
+    <button class="sub-tab" onclick="filterSubCat('web-full', this)">Tam Web Sitesi</button>
+    <button class="sub-tab" onclick="filterSubCat('web-loading', this)">Yüklenme Ekranları</button>
+    <button class="sub-tab" onclick="filterSubCat('web-login', this)">Giriş Ekranları</button>
+  </div>
+  <!-- Projeler JS tarafından bu grid'e eklenir -->
+  <div id="projects-grid">
+    <div class="empty-state">
+      <i class="fas fa-box-open"></i>
+      <p>Henüz proje eklenmemiş.</p>
+      <p style="font-size:0.82rem">Admin panelinden proje yükleyebilirsin.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===== İLETİŞİM ===== -->
+<section id="contact">
+  <div class="contact-inner">
+    <p class="section-label">İletişim</p>
+    <h2 class="section-title" style="font-family:var(--font-display)">Benimle İletişime Geç</h2>
+    <p style="margin-top:0.8rem;color:var(--text-muted)">Proje fikrin, iş birliği teklifin veya sorun varsa bana ulaş.</p>
+    <div class="contact-cards">
+      <div class="contact-card" onclick="window.location='mailto:umutcsknr1@gmail.com'">
+        <i class="fas fa-envelope"></i>
+        <strong>E-posta</strong>
+        <span><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="fe8b938b8a9d8d95908ccfbe99939f9792d09d9193">[email&#160;protected]</a></span>
+      </div>
+      <div class="contact-card" onclick="window.open('https://instagram.com/','_blank')">
+        <i class="fab fa-instagram"></i>
+        <strong>Instagram</strong>
+        <span>Takip Et</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== FOOTER ===== -->
+<footer>
+  <img class="footer-logo" src="logo.png" alt="UD"/>
+  <p>© 2026 Umut Development — Tüm Hakları Saklıdır.</p>
+</footer>
+
+<!-- ===== ADMİN GİRİŞ MODALI ===== -->
+<div class="modal-overlay" id="login-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('login-modal')">✕</button>
+    <h2><i class="fas fa-shield-alt" style="color:var(--blue-primary)"></i> Admin Girişi</h2>
+    <div class="form-group">
+      <label>Kullanıcı Adı</label>
+      <input class="form-control" type="text" id="login-user" placeholder="Kullanıcı adını gir"/>
+    </div>
+    <div class="form-group">
+      <label>Şifre</label>
+      <input class="form-control" type="password" id="login-pass" placeholder="Şifreni gir"/>
+      <!-- Yanlış giriş mesajı buraya yazılır -->
+      <p class="form-error" id="login-error" style="display:none"></p>
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="attemptLogin()">
+      <i class="fas fa-sign-in-alt"></i> Giriş Yap
+    </button>
+  </div>
+</div>
+
+<!-- ===== ADMİN PANELİ MODALI ===== -->
+<div class="modal-overlay" id="admin-modal">
+  <div class="modal modal-lg">
+    <button class="modal-close" onclick="adminLogout()">✕</button>
+    <h2><i class="fas fa-cog" style="color:var(--blue-primary)"></i> Admin Paneli</h2>
+
+    <!-- Sekme butonları -->
+    <div class="admin-tabs">
+      <button class="admin-tab active" onclick="switchAdminTab('upload', this)"><i class="fas fa-upload"></i> Proje Yükle</button>
+      <button class="admin-tab" onclick="switchAdminTab('logs', this)"><i class="fas fa-exclamation-triangle"></i> Giriş Denemeleri</button>
+      <button class="admin-tab" onclick="switchAdminTab('manage', this)"><i class="fas fa-list"></i> Projelerim</button>
+    </div>
+
+    <!-- PROJE YÜKLEME SEKMESİ -->
+    <div id="admin-upload" class="admin-panel-section active">
+      <div class="admin-frame">
+        <div class="admin-frame-label">ADMİN PANELİ</div>
+        <br/>
+        <!-- Kategori seçimi -->
+        <div class="form-group">
+          <label>Ana Kategori</label>
+          <div class="cat-row">
+            <button class="cat-btn" onclick="selectAdminCat('iot', this)">🔌 IoT Projeleri</button>
+            <button class="cat-btn" onclick="selectAdminCat('web', this)">🌐 Web Projeleri</button>
+          </div>
+        </div>
+        <!-- Web seçilince açılan alt kategoriler -->
+        <div class="form-group" id="admin-subcat-wrap" style="display:none">
+          <label>Alt Kategori (Web)</label>
+          <div id="admin-subcats">
+            <button class="cat-btn" onclick="selectAdminSubCat('web-full', this)">Tam Web Sitesi</button>
+            <button class="cat-btn" onclick="selectAdminSubCat('web-loading', this)">Yüklenme Ekranları</button>
+            <button class="cat-btn" onclick="selectAdminSubCat('web-login', this)">Giriş Ekranları</button>
+          </div>
+        </div>
+        <!-- Başlık -->
+        <div class="form-group">
+          <label>Başlık</label>
+          <input class="form-control" type="text" id="p-title" placeholder="Proje başlığı"/>
+        </div>
+        <!-- Açıklama -->
+        <div class="form-group">
+          <label>Açıklama</label>
+          <textarea class="form-control" id="p-desc" placeholder="Projeyi kısaca anlat..."></textarea>
+        </div>
+        <!-- Görsel / Dosya yükleme -->
+        <div class="form-group">
+          <label>Görsel / Dosya (PNG, JPG, PDF...)</label>
+          <input class="form-control" type="file" id="p-file" accept="image/*,.pdf"/>
+        </div>
+
+        <!-- ===== VIDEO YÜKLEME — İki mod: YouTube URL veya .mp4 dosyası ===== -->
+        <div class="form-group">
+          <label>Video (YouTube URL veya .mp4 Dosyası)</label>
+          <!-- Sekme seçimi: URL mi, dosya mı? -->
+          <div class="video-tabs">
+            <button class="video-tab active" onclick="switchVideoTab('url', this)">
+              <i class="fab fa-youtube"></i> YouTube URL
+            </button>
+            <button class="video-tab" onclick="switchVideoTab('file', this)">
+              <i class="fas fa-file-video"></i> Dosya Yükle (.mp4)
+            </button>
+          </div>
+          <!-- YouTube URL girişi -->
+          <div class="video-input-panel active" id="video-url-panel">
+            <input class="form-control" type="url" id="p-video-url" placeholder="https://youtube.com/watch?v=..."/>
+          </div>
+          <!-- .mp4 dosyası yükleme -->
+          <div class="video-input-panel" id="video-file-panel">
+            <input class="form-control" type="file" id="p-video-file" accept="video/mp4,video/*"/>
+            <p style="font-size:0.78rem;color:var(--text-muted);margin-top:0.4rem">
+              ⚠️ Büyük dosyalar tarayıcıda yavaş yüklenebilir. Küçük videolar için önerilir.
+            </p>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" onclick="addProject()">
+          <i class="fas fa-plus"></i> Projeyi Ekle
+        </button>
+      </div>
+    </div>
+
+    <!-- GİRİŞ DENEMELERİ LOGLARI SEKMESİ -->
+    <div id="admin-logs" class="admin-panel-section">
+      <h3 style="font-family:var(--font-display);font-size:1.1rem;margin-bottom:1rem;">Başarısız Giriş Denemeleri</h3>
+      <div class="log-table-wrap">
+        <table class="log-table">
+          <thead>
+            <tr>
+              <th>#</th><th>Tarih / Saat</th><th>Kullanıcı Adı</th><th>Şifre</th>
+            </tr>
+          </thead>
+          <tbody id="log-tbody">
+            <tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:2rem">Henüz başarısız giriş yok.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- PROJELERİM YÖNETİM SEKMESİ -->
+    <div id="admin-manage" class="admin-panel-section">
+      <h3 style="font-family:var(--font-display);font-size:1.1rem;margin-bottom:1rem;">Yüklenen Projeler</h3>
+      <div id="admin-project-list"></div>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="script.js"></script>
+</body>
+</html>
