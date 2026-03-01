@@ -341,7 +341,7 @@ if (ytId) media = `
 }
 
 function extractYoutubeId(url) {
-  const m = url.match(/(?:v=|youtu\.be\/|embed\/)([^&\n?#]+)/);
+  const m = url.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([^&\n?#]+)/);
   return m ? m[1] : null;
 }
 
