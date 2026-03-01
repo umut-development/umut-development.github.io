@@ -10,9 +10,8 @@ import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, Googl
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 
-  import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, updateDoc, onSnapshot }
+import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, updateDoc, onSnapshot, setDoc, getDoc }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
 
 const CLOUDINARY_CLOUD = "dhfbwzn9t";
 const CLOUDINARY_PRESET = "umut_dev_uploads";
@@ -408,20 +407,19 @@ if (ytId) media = `
 /* ===== BEĞENİ ===== */
 async function toggleLike(projectId) {
   if (!currentUser) { showToast("Beğenmek için giriş yap!", "info"); return; }
-  
+
   const btn = document.getElementById(`like-btn-${projectId}`);
-  if (btn) btn.disabled = true; // İşlem bitene kadar butonu kilitle
+  if (btn) btn.disabled = true;
 
   try {
     const likeId  = `${projectId}_${currentUser.uid}`;
     const likeRef = doc(db, "likes", likeId);
-    const snap    = await getDocs(collection(db, "likes"));
-    const exists  = snap.docs.some(d => d.id === likeId);
+    const likeSnap = await getDoc(likeRef);
 
-    if (exists) {
+    if (likeSnap.exists()) {
       await deleteDoc(likeRef);
     } else {
-      await addDoc(collection(db, "likes"), {
+      await setDoc(likeRef, {
         projectId,
         uid: currentUser.uid,
         name: currentUser.displayName || "Anonim",
@@ -432,27 +430,28 @@ async function toggleLike(projectId) {
   } catch(e) {
     showToast("İşlem başarısız!", "error");
   } finally {
-    if (btn) btn.disabled = false; // İşlem bitince butonu aç
+    if (btn) btn.disabled = false;
   }
 }
 
 /* ===== FAVORİ ===== */
+
 async function toggleFavorite(projectId) {
   if (!currentUser) { showToast("Favorilere eklemek için giriş yap!", "info"); return; }
 
   const btn = document.getElementById(`fav-btn-${projectId}`);
-  if (btn) btn.disabled = true; // İşlem bitene kadar butonu kilitle
+  if (btn) btn.disabled = true;
 
   try {
     const favId  = `${projectId}_${currentUser.uid}`;
-    const snap   = await getDocs(collection(db, "favorites"));
-    const exists = snap.docs.some(d => d.id === favId);
+    const favRef = doc(db, "favorites", favId);
+    const favSnap = await getDoc(favRef);
 
-    if (exists) {
-      await deleteDoc(doc(db, "favorites", favId));
+    if (favSnap.exists()) {
+      await deleteDoc(favRef);
       showToast("Favorilerden kaldırıldı.", "info");
     } else {
-      await addDoc(collection(db, "favorites"), {
+      await setDoc(favRef, {
         projectId,
         uid: currentUser.uid,
         timestamp: Date.now()
@@ -463,7 +462,7 @@ async function toggleFavorite(projectId) {
   } catch(e) {
     showToast("İşlem başarısız!", "error");
   } finally {
-    if (btn) btn.disabled = false; // İşlem bitince butonu aç
+    if (btn) btn.disabled = false;
   }
 }
 
