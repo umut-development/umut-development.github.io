@@ -57,6 +57,13 @@ async function attemptLogin() {
   const pass  = document.getElementById("login-pass").value;
   const errEl = document.getElementById("login-error");
 
+const captcha = grecaptcha.getResponse();
+if (!captcha) {
+  errEl.textContent = "❌ Lütfen robot olmadığını doğrula!";
+  errEl.style.display = "block";
+  return;
+}
+
   if (!email || !pass) {
     errEl.textContent = "E-posta ve şifre boş olamaz!";
     errEl.style.display = "block";
@@ -102,6 +109,7 @@ async function attemptLogin() {
     errEl.textContent = msg;
     errEl.style.display = "block";
     showToast("Giriş başarısız!", "error");
+    grecaptcha.reset();
   }
 }
 
@@ -259,6 +267,11 @@ async function saveProjectToFirestore(media, title, desc) {
   showToast("Proje başarıyla eklendi! 🎉", "success");
 }
 
+function onHomeCaptchaSuccess(token) {
+  document.getElementById("recaptcha-overlay").style.display = "none";
+}
+window.onHomeCaptchaSuccess = onHomeCaptchaSuccess;
+
 async function loadProjectsFromFirestore() {
   try {
     const q = query(collection(db, "projects"), orderBy("timestamp", "desc"));
@@ -291,7 +304,18 @@ if (p.vidUrl) {
   media = `<video src="${p.vidUrl}" controls muted playsinline style="width:100%;height:100%;object-fit:cover;border-radius:0"></video>`;
 } else if (p.videoUrl) {
   const ytId = extractYoutubeId(p.videoUrl);
-  if (ytId) media = `<iframe src="https://www.youtube.com/embed/${ytId}" style="width:100%;height:100%;border:none" allowfullscreen loading="lazy"></iframe>`;
+if (ytId) media = `
+  <div style="position:relative;width:100%;height:100%;cursor:pointer"
+    onclick="this.innerHTML='<iframe src=https://www.youtube.com/embed/${ytId}?autoplay=1 style=width:100%;height:100%;border:none allowfullscreen></iframe>'">
+    <img src="https://img.youtube.com/vi/${ytId}/maxresdefault.jpg"
+      style="width:100%;height:100%;object-fit:cover;border-radius:0"/>
+    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+      background:rgba(0,0,0,0.3)">
+      <div style="width:56px;height:56px;background:#ff0000;border-radius:50%;display:flex;align-items:center;justify-content:center">
+        <i class="fas fa-play" style="color:white;font-size:1.2rem;margin-left:4px"></i>
+      </div>
+    </div>
+  </div>`;
 } else if (p.fileUrl) {
   media = `<img src="${p.fileUrl}" alt="${p.title}" style="width:100%;height:100%;object-fit:cover;border-radius:0"/>`;
 }
