@@ -48,6 +48,19 @@
     <a href="#about">Hakkımda</a>
     <a href="#projects">Projeler</a>
     <a href="#contact">İletişim</a>
+
+    <div id="user-area" style="display:flex;align-items:center;gap:0.75rem;">
+  <button id="google-btn" class="btn btn-outline btn-sm" onclick="googleLogin()">
+    <i class="fab fa-google"></i> Giriş Yap
+  </button>
+  <div id="user-info" style="display:none;align-items:center;gap:0.5rem;">
+    <img id="user-avatar" style="width:32px;height:32px;border-radius:50%;object-fit:cover;" src="" alt=""/>
+    <span id="user-name" style="font-size:0.85rem;font-weight:600;color:var(--text)"></span>
+    <button class="btn btn-outline btn-sm" onclick="googleLogout()">Çıkış</button>
+  </div>
+</div>
+
+
     <button class="btn btn-primary btn-sm" onclick="openModal('login-modal')">
       <i class="fas fa-lock"></i> Admin
     </button>
@@ -67,6 +80,11 @@
   <a href="#about"    onclick="closeMobileMenu()">Hakkımda</a>
   <a href="#projects" onclick="closeMobileMenu()">Projeler</a>
   <a href="#contact"  onclick="closeMobileMenu()">İletişim</a>
+
+  <button id="mobile-google-btn" class="btn btn-outline" onclick="closeMobileMenu(); googleLogin()">
+  <i class="fab fa-google"></i> Google ile Giriş Yap
+</button>
+
   <button class="btn btn-primary" onclick="closeMobileMenu(); openModal('login-modal')">
     <i class="fas fa-lock"></i> Admin Girişi
   </button>
@@ -152,11 +170,11 @@
     <h2 class="section-title" style="font-family:var(--font-display)">Benimle İletişime Geç</h2>
     <p style="margin-top:0.8rem;color:var(--text-muted)">Proje fikrin, iş birliği teklifin veya sorun varsa bana ulaş.</p>
     <div class="contact-cards">
-      <div class="contact-card" onclick="window.location='mailto:umutcsknr1@gmail.com'">
-        <i class="fas fa-envelope"></i>
-        <strong>E-posta</strong>
-        <span><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="fe8b938b8a9d8d95908ccfbe99939f9792d09d9193">[email&#160;protected]</a></span>
-      </div>
+     <div class="contact-card" onclick="window.location='mailto:umutdevelopmentt@gmail.com'">
+  <i class="fas fa-envelope"></i>
+  <strong>İş & İletişim</strong>
+  <span>umutdevelopmentt@gmail.com</span>
+</div>
       <div class="contact-card" onclick="window.open('https://instagram.com/','_blank')">
         <i class="fab fa-instagram"></i>
         <strong>Instagram</strong>
@@ -166,11 +184,43 @@
   </div>
 </section>
 
+
+<div id="message-btn-wrap" style="margin-top:1.5rem;display:none;">
+  <button class="btn btn-primary" onclick="openModal('message-modal')">
+    <i class="fas fa-paper-plane"></i> Admin'e Mesaj Gönder
+  </button>
+</div>
+<p id="message-login-hint" style="margin-top:1rem;font-size:0.85rem;color:var(--text-muted)">
+  Mesaj göndermek için <a onclick="googleLogin()" style="color:var(--blue-primary);cursor:pointer;font-weight:600">Google ile giriş yap</a>
+</p>
+
+
+
 <!-- ===== FOOTER ===== -->
 <footer>
   <img class="footer-logo" src="logo.png" alt="UD"/>
   <p>© 2026 Umut Development — Tüm Hakları Saklıdır.</p>
 </footer>
+
+
+<!-- KULLANICI MESAJ MODALI -->
+<div class="modal-overlay" id="message-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('message-modal')">✕</button>
+    <h2><i class="fas fa-paper-plane" style="color:var(--blue-primary)"></i> Admin'e Mesaj Gönder</h2>
+    <div class="form-group">
+      <label>Konu</label>
+      <input class="form-control" type="text" id="msg-subject" placeholder="Mesaj konusu..."/>
+    </div>
+    <div class="form-group">
+      <label>Mesaj</label>
+      <textarea class="form-control" id="msg-body" placeholder="Mesajını yaz..." style="min-height:120px"></textarea>
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="sendMessage()">
+      <i class="fas fa-paper-plane"></i> Gönder
+    </button>
+  </div>
+</div>
 
 <div class="modal-overlay" id="code-modal">
   <div class="modal modal-lg">
@@ -213,6 +263,7 @@
       <button class="admin-tab active" onclick="switchAdminTab('upload', this)"><i class="fas fa-upload"></i> Proje Yükle</button>
       <button class="admin-tab" onclick="switchAdminTab('logs', this)"><i class="fas fa-exclamation-triangle"></i> Giriş Denemeleri</button>
       <button class="admin-tab" onclick="switchAdminTab('manage', this)"><i class="fas fa-list"></i> Projelerim</button>
+      <button class="admin-tab" onclick="switchAdminTab('messages', this)"><i class="fas fa-envelope"></i> Mesajlar <span id="unread-badge" style="background:#ef4444;color:white;border-radius:100px;padding:1px 7px;font-size:0.72rem;margin-left:4px;display:none"></span></button>
     </div>
 
     <!-- PROJE YÜKLEME SEKMESİ -->
@@ -311,6 +362,15 @@
     </div>
 
     <!-- PROJELERİM YÖNETİM SEKMESİ -->
+
+    <div id="admin-messages" class="admin-panel-section">
+  <h3 style="font-family:var(--font-display);font-size:1.1rem;margin-bottom:1rem;">
+    <i class="fas fa-envelope" style="color:var(--blue-primary)"></i> Kullanıcı Mesajları
+  </h3>
+  <div id="messages-list"></div>
+</div>
+
+
     <div id="admin-manage" class="admin-panel-section">
       <h3 style="font-family:var(--font-display);font-size:1.1rem;margin-bottom:1rem;">Yüklenen Projeler</h3>
       <div id="admin-project-list"></div>

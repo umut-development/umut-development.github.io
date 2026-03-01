@@ -976,3 +976,113 @@ textarea.form-control {
   .btn-outline:hover  { transform: none; }
   .contact-card:hover { transform: none; }
 }
+
+
+/* ===== KULLANICI ALANI — Navbar ===== */
+#user-info {
+  display: none;
+  align-items: center;
+  gap: 0.5rem;
+}
+#user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--blue-primary);
+}
+#user-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ===== YORUM ALANI ===== */
+#projects-grid .form-control {
+  font-size: 14px;
+}
+.comment-item {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.comment-item:last-child { border-bottom: none; }
+.comment-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.comment-name {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--blue-primary);
+}
+.comment-text {
+  font-size: 0.82rem;
+  color: var(--text);
+  margin-top: 0.2rem;
+  line-height: 1.5;
+}
+.comment-date {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 0.2rem;
+}
+
+/* ===== BEĞENİ / FAVORİ BUTONLARI ===== */
+.action-btn {
+  background: none;
+  border: 1.5px solid var(--border);
+  border-radius: 100px;
+  padding: 5px 12px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: all var(--transition);
+  -webkit-tap-highlight-color: transparent;
+}
+.action-btn:hover { border-color: var(--blue-primary); color: var(--blue-primary); }
+.action-btn.liked { background: #fee2e2; border-color: #ef4444; color: #ef4444; }
+.action-btn.favorited { background: var(--blue-light); border-color: var(--blue-primary); color: var(--blue-primary); }
+
+/* ===== OKUNMAMIŞ MESAJ BADGE ===== */
+#unread-badge {
+  background: #ef4444;
+  color: white;
+  border-radius: 100px;
+  padding: 1px 7px;
+  font-size: 0.72rem;
+  margin-left: 4px;
+  display: none;
+}
+
+/* ===== MESAJ KARTI ===== */
+.message-card {
+  background: var(--surface2);
+  border-radius: var(--radius-sm);
+  padding: 1rem;
+  margin-bottom: 0.8rem;
+  border-left: 4px solid var(--blue-primary);
+  transition: border-color var(--transition);
+}
+.message-card.read {
+  border-left-color: var(--border);
+  opacity: 0.8;
+}
+
+/* ===== MOBİLDE KULLANICI ALANI ===== */
+@media (max-width: 768px) {
+  #user-name { display: none; }
+  #user-area { gap: 0.4rem; }
+}
