@@ -1096,24 +1096,38 @@ function escapeHtml(str) {
   return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
 
-window.showCodeModal = showCodeModal;
-window.downloadCode  = downloadCode;
-
+/* ===== TÜM GLOBAL FONKSİYONLAR ===== */
+window.openModal              = openModal;
+window.closeModal             = closeModal;
+window.attemptLogin           = attemptLogin;
+window.adminLogout            = adminLogout;
+window.switchAdminTab         = switchAdminTab;
+window.switchVideoTab         = switchVideoTab;
+window.selectAdminCat         = selectAdminCat;
+window.selectAdminSubCat      = selectAdminSubCat;
+window.addProject             = addProject;
+window.deleteProject          = deleteProject;
+window.filterCat              = filterCat;
+window.filterSubCat           = filterSubCat;
+window.showCodeModal          = showCodeModal;
+window.downloadCode           = downloadCode;
+window.toggleMobileMenu       = toggleMobileMenu;
+window.closeMobileMenu        = closeMobileMenu;
+window.googleLogin            = googleLogin;
+window.googleLogout           = googleLogout;
+window.toggleLike             = toggleLike;
+window.toggleFavorite         = toggleFavorite;
+window.addComment             = addComment;
+window.deleteComment          = deleteComment;
+window.sendMessage            = sendMessage;
+window.markRead               = markRead;
+window.replyMessage           = replyMessage;
+window.renderInbox            = renderInbox;
 window.openCommentsModal      = openCommentsModal;
 window.addCommentFromModal    = addCommentFromModal;
 window.deleteCommentFromModal = deleteCommentFromModal;
-
-
-window.replyMessage  = replyMessage;
-window.renderInbox   = renderInbox;
-window.googleLogin      = googleLogin;
-window.googleLogout     = googleLogout;
-window.toggleLike       = toggleLike;
-window.toggleFavorite   = toggleFavorite;
-window.addComment       = addComment;
-window.deleteComment    = deleteComment;
-window.sendMessage      = sendMessage;
-window.markRead         = markRead;
-
-window.toggleMobileMenu = toggleMobileMenu;
-window.closeMobileMenu  = closeMobileMenu;
+window.adminViewComments      = adminViewComments;
+window.adminDeleteComment     = adminDeleteComment;
+window.adminDeleteAllComments = adminDeleteAllComments;
+window.adminResetLikes        = adminResetLikes;
+window.adminResetFavorites    = adminResetFavorites;
