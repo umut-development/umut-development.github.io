@@ -323,8 +323,9 @@ async function loadProjectsFromFirestore() {
   try {
     const q = query(collection(db, "projects"), orderBy("timestamp", "desc"));
     const snapshot = await getDocs(q);
-    projects = snapshot.docs.map(d => ({id: d.id, ...d.data()}));
-    renderProjects();
+    const rawProjects = snapshot.docs.map(d => ({id: d.id, ...d.data()}));
+projects = await enrichProjects(rawProjects);
+renderProjects();
   } catch(e) {
     console.error("Firestore yükleme hatası:", e);
   }
@@ -381,20 +382,22 @@ if (ytId) media = `
           </div>
           <div class="card-title">${p.title}</div>
           <div class="card-desc">${p.desc || "Açıklama eklenmedi."}</div>
-          <div style="display:flex;gap:0.5rem;margin-top:0.8rem;flex-wrap:wrap;">
-  <button onclick="toggleLike('${p.id}')" style="background:none;border:1.5px solid var(--border);border-radius:100px;padding:5px 12px;cursor:pointer;font-size:0.82rem;color:var(--text-muted);display:flex;align-items:center;gap:5px">
-    ❤️ Beğen
+        <div style="display:flex;gap:0.5rem;margin-top:0.8rem;flex-wrap:wrap;align-items:center;">
+  <button onclick="toggleLike('${p.id}')" 
+    class="action-btn ${p.likedByMe ? 'liked' : ''}"
+    id="like-btn-${p.id}">
+    ❤️ <span id="like-count-${p.id}">${p.likeCount || 0}</span>
   </button>
-  <button onclick="toggleFavorite('${p.id}')" style="background:none;border:1.5px solid var(--border);border-radius:100px;padding:5px 12px;cursor:pointer;font-size:0.82rem;color:var(--text-muted);display:flex;align-items:center;gap:5px">
-    🔖 Favorile
+  <button onclick="toggleFavorite('${p.id}')"
+    class="action-btn ${p.favoritedByMe ? 'favorited' : ''}"
+    id="fav-btn-${p.id}">
+    🔖 <span id="fav-count-${p.id}">${p.favCount || 0}</span>
   </button>
-</div>
-<div style="margin-top:0.8rem;">
-  <div id="comments-${p.id}" style="margin-bottom:0.5rem;max-height:200px;overflow-y:auto;"></div>
-  <div style="display:flex;gap:0.5rem;">
-    <input id="comment-input-${p.id}" class="form-control" style="font-size:14px;padding:8px 12px" placeholder="Yorum yaz..."/>
-    <button onclick="addComment('${p.id}')" class="btn btn-primary btn-sm">Gönder</button>
-  </div>
+  <button onclick="openCommentsModal('${p.id}', '${p.title}')"
+    class="action-btn"
+    id="comment-btn-${p.id}">
+    💬 <span id="comment-count-${p.id}">${p.commentCount || 0}</span>
+  </button>
 </div>
           ${p.codeData ? `<button class="btn btn-outline btn-sm" style="margin-top:0.8rem;width:100%" onclick="showCodeModal('${p.id}')"><i class="fas fa-code"></i> Kodu Görüntüle (${p.codeName || 'kaynak kodu'})</button>` : ''}
         </div>
@@ -405,43 +408,43 @@ if (ytId) media = `
 /* ===== BEĞENİ ===== */
 async function toggleLike(projectId) {
   if (!currentUser) { showToast("Beğenmek için giriş yap!", "info"); return; }
-  const likeId = `${projectId}_${currentUser.uid}`;
+  const likeId  = `${projectId}_${currentUser.uid}`;
   const likeRef = doc(db, "likes", likeId);
-  const snap = await getDocs(query(collection(db, "likes"), orderBy("timestamp","desc")));
-  const exists = snap.docs.some(d => d.id === likeId);
+  const snap    = await getDocs(collection(db, "likes"));
+  const exists  = snap.docs.some(d => d.id === likeId);
+
   if (exists) {
     await deleteDoc(likeRef);
   } else {
-    await addDoc(collection(db, "likes"), {
-      projectId, uid: currentUser.uid,
-      name: currentUser.displayName || "Anonim",
-      timestamp: Date.now()
+    const newRef = doc(db, "likes", likeId);
+    await updateDoc(newRef, {}).catch(async () => {
+      await addDoc(collection(db, "likes"), {
+        projectId, uid: currentUser.uid,
+        name: currentUser.displayName || "Anonim",
+        timestamp: Date.now()
+      });
     });
   }
-  renderProjects();
+  await loadProjectsFromFirestore();
 }
 
 /* ===== FAVORİ ===== */
 async function toggleFavorite(projectId) {
   if (!currentUser) { showToast("Favorilere eklemek için giriş yap!", "info"); return; }
-  const favId = `${projectId}_${currentUser.uid}`;
-  const favRef = doc(db, "favorites", favId);
-  try {
-    const snap = await getDocs(query(collection(db, "favorites")));
-    const exists = snap.docs.some(d => d.id === favId);
-    if (exists) {
-      await deleteDoc(favRef);
-      showToast("Favorilerden kaldırıldı.", "info");
-    } else {
-      await addDoc(collection(db, "favorites"), {
-        projectId, uid: currentUser.uid, timestamp: Date.now()
-      });
-      showToast("Favorilere eklendi! 🔖", "success");
-    }
-    renderProjects();
-  } catch(e) {
-    showToast("İşlem başarısız!", "error");
+  const favId  = `${projectId}_${currentUser.uid}`;
+  const snap   = await getDocs(collection(db, "favorites"));
+  const exists = snap.docs.some(d => d.id === favId);
+
+  if (exists) {
+    await deleteDoc(doc(db, "favorites", favId));
+    showToast("Favorilerden kaldırıldı.", "info");
+  } else {
+    await addDoc(collection(db, "favorites"), {
+      projectId, uid: currentUser.uid, timestamp: Date.now()
+    });
+    showToast("Favorilere eklendi! 🔖", "success");
   }
+  await loadProjectsFromFirestore();
 }
 
 /* ===== YORUM EKLE ===== */
@@ -589,6 +592,89 @@ async function markRead(msgId) {
   }
 }
 
+/* Aktif yorum modalındaki proje ID'si */
+let activeCommentProjectId = null;
+
+async function openCommentsModal(projectId, title) {
+  if (!currentUser) {
+    showToast("Yorumları görmek için giriş yap!", "info");
+    return;
+  }
+  activeCommentProjectId = projectId;
+  document.getElementById("comments-modal-title").textContent = title + " — Yorumlar";
+
+  /* Giriş durumuna göre input göster */
+  document.getElementById("comment-input-wrap").style.display = currentUser ? "block" : "none";
+  document.getElementById("comment-login-hint").style.display = currentUser ? "none" : "block";
+
+  await loadCommentsForModal(projectId);
+  openModal("comments-modal");
+}
+
+async function loadCommentsForModal(projectId) {
+  const el = document.getElementById("comments-modal-list");
+  el.innerHTML = `<p style="color:var(--text-muted);text-align:center">Yükleniyor...</p>`;
+
+  const q    = query(collection(db, "comments"), orderBy("timestamp", "asc"));
+  const snap = await getDocs(q);
+  const comments = snap.docs.filter(d => d.data().projectId === projectId);
+
+  if (!comments.length) {
+    el.innerHTML = `<p style="color:var(--text-muted);text-align:center;padding:1.5rem">Henüz yorum yok. İlk yorumu yap!</p>`;
+    return;
+  }
+
+  el.innerHTML = comments.map(d => {
+    const c = d.data();
+    const isOwner = currentUser && currentUser.uid === c.uid;
+    return `
+      <div class="comment-item">
+        <img class="comment-avatar" src="${c.avatar || ''}" onerror="this.style.display='none'" alt=""/>
+        <div style="flex:1">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span class="comment-name">${c.name || 'Anonim'}</span>
+            <span class="comment-date">${c.date}</span>
+          </div>
+          <p class="comment-text">${c.text}</p>
+        </div>
+        ${isOwner ? `<button onclick="deleteCommentFromModal('${d.id}', '${projectId}')" 
+          style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:0.8rem;padding:4px">
+          <i class="fas fa-trash"></i>
+        </button>` : ''}
+      </div>`;
+  }).join("");
+}
+
+async function addCommentFromModal() {
+  if (!currentUser || !activeCommentProjectId) return;
+  const input = document.getElementById("comment-input-modal");
+  const text  = input.value.trim();
+  if (!text) { showToast("Yorum boş olamaz!", "error"); return; }
+
+  await addDoc(collection(db, "comments"), {
+    projectId: activeCommentProjectId,
+    text,
+    uid:    currentUser.uid,
+    name:   currentUser.displayName || "Anonim",
+    avatar: currentUser.photoURL || "",
+    timestamp: Date.now(),
+    date:   new Date().toLocaleDateString("tr-TR")
+  });
+
+  input.value = "";
+  await loadCommentsForModal(activeCommentProjectId);
+  await loadProjectsFromFirestore();
+  showToast("Yorum eklendi! 💬", "success");
+}
+
+async function deleteCommentFromModal(commentId, projectId) {
+  if (!confirm("Yorumu silmek istediğinden emin misin?")) return;
+  await deleteDoc(doc(db, "comments", commentId));
+  await loadCommentsForModal(projectId);
+  await loadProjectsFromFirestore();
+  showToast("Yorum silindi.", "info");
+}
+
 /* ===== ADMIN CEVAP VER ===== */
 async function replyMessage(msgId) {
   const input = document.getElementById(`reply-input-${msgId}`);
@@ -709,6 +795,32 @@ function listenForReplies(uid) {
     } else {
       badge.style.display = "none";
     }
+  });
+}
+
+/* Projelere beğeni, favori ve yorum sayılarını ekle */
+async function enrichProjects(rawProjects) {
+  const uid = currentUser ? currentUser.uid : null;
+
+  const [likesSnap, favsSnap, commentsSnap] = await Promise.all([
+    getDocs(collection(db, "likes")),
+    getDocs(collection(db, "favorites")),
+    getDocs(collection(db, "comments"))
+  ]);
+
+  return rawProjects.map(p => {
+    const likes     = likesSnap.docs.filter(d => d.data().projectId === p.id);
+    const favs      = favsSnap.docs.filter(d => d.data().projectId === p.id);
+    const comments  = commentsSnap.docs.filter(d => d.data().projectId === p.id);
+
+    return {
+      ...p,
+      likeCount:    likes.length,
+      favCount:     favs.length,
+      commentCount: comments.length,
+      likedByMe:    uid ? likes.some(d => d.data().uid === uid) : false,
+      favoritedByMe:uid ? favs.some(d => d.data().uid === uid) : false,
+    };
   });
 }
 
@@ -878,6 +990,12 @@ function escapeHtml(str) {
 
 window.showCodeModal = showCodeModal;
 window.downloadCode  = downloadCode;
+
+window.openCommentsModal      = openCommentsModal;
+window.addCommentFromModal    = addCommentFromModal;
+window.deleteCommentFromModal = deleteCommentFromModal;
+
+
 window.replyMessage  = replyMessage;
 window.renderInbox   = renderInbox;
 window.googleLogin      = googleLogin;

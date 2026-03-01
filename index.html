@@ -199,6 +199,7 @@
 <p id="message-login-hint" style="margin-top:1rem;font-size:0.85rem;color:var(--text-muted)">
   Mesaj göndermek için <a onclick="googleLogin()" style="color:var(--blue-primary);cursor:pointer;font-weight:600">Google ile giriş yap</a>
 </p>
+<br><br>
 
 
 
@@ -214,6 +215,26 @@
     <button class="modal-close" onclick="closeModal('inbox-modal')">✕</button>
     <h2><i class="fas fa-inbox" style="color:var(--blue-primary)"></i> Gelen Kutusu</h2>
     <div id="inbox-list"></div>
+  </div>
+</div>
+
+<!-- YORUMLAR MODALI -->
+<div class="modal-overlay" id="comments-modal">
+  <div class="modal modal-lg">
+    <button class="modal-close" onclick="closeModal('comments-modal')">✕</button>
+    <h2><i class="fas fa-comments" style="color:var(--blue-primary)"></i> <span id="comments-modal-title">Yorumlar</span></h2>
+    <div id="comments-modal-list" style="max-height:50vh;overflow-y:auto;margin-bottom:1rem;"></div>
+    <div id="comment-input-wrap" style="display:none;">
+      <div style="display:flex;gap:0.5rem;">
+        <input id="comment-input-modal" class="form-control" placeholder="Yorum yaz..." style="font-size:14px;padding:8px 12px"/>
+        <button class="btn btn-primary btn-sm" onclick="addCommentFromModal()">
+          <i class="fas fa-paper-plane"></i> Gönder
+        </button>
+      </div>
+    </div>
+    <p id="comment-login-hint" style="text-align:center;font-size:0.85rem;color:var(--text-muted);display:none">
+      Yorum yapmak için <a onclick="googleLogin()" style="color:var(--blue-primary);cursor:pointer;font-weight:600">Google ile giriş yap</a>
+    </p>
   </div>
 </div>
 
