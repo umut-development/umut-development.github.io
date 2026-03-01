@@ -1110,3 +1110,9 @@ textarea.form-control {
 #message-login-hint {
   text-align: center;
 }
+
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}

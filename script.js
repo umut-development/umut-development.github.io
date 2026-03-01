@@ -408,43 +408,63 @@ if (ytId) media = `
 /* ===== BEĞENİ ===== */
 async function toggleLike(projectId) {
   if (!currentUser) { showToast("Beğenmek için giriş yap!", "info"); return; }
-  const likeId  = `${projectId}_${currentUser.uid}`;
-  const likeRef = doc(db, "likes", likeId);
-  const snap    = await getDocs(collection(db, "likes"));
-  const exists  = snap.docs.some(d => d.id === likeId);
+  
+  const btn = document.getElementById(`like-btn-${projectId}`);
+  if (btn) btn.disabled = true; // İşlem bitene kadar butonu kilitle
 
-  if (exists) {
-    await deleteDoc(likeRef);
-  } else {
-    const newRef = doc(db, "likes", likeId);
-    await updateDoc(newRef, {}).catch(async () => {
+  try {
+    const likeId  = `${projectId}_${currentUser.uid}`;
+    const likeRef = doc(db, "likes", likeId);
+    const snap    = await getDocs(collection(db, "likes"));
+    const exists  = snap.docs.some(d => d.id === likeId);
+
+    if (exists) {
+      await deleteDoc(likeRef);
+    } else {
       await addDoc(collection(db, "likes"), {
-        projectId, uid: currentUser.uid,
+        projectId,
+        uid: currentUser.uid,
         name: currentUser.displayName || "Anonim",
         timestamp: Date.now()
       });
-    });
+    }
+    await loadProjectsFromFirestore();
+  } catch(e) {
+    showToast("İşlem başarısız!", "error");
+  } finally {
+    if (btn) btn.disabled = false; // İşlem bitince butonu aç
   }
-  await loadProjectsFromFirestore();
 }
 
 /* ===== FAVORİ ===== */
 async function toggleFavorite(projectId) {
   if (!currentUser) { showToast("Favorilere eklemek için giriş yap!", "info"); return; }
-  const favId  = `${projectId}_${currentUser.uid}`;
-  const snap   = await getDocs(collection(db, "favorites"));
-  const exists = snap.docs.some(d => d.id === favId);
 
-  if (exists) {
-    await deleteDoc(doc(db, "favorites", favId));
-    showToast("Favorilerden kaldırıldı.", "info");
-  } else {
-    await addDoc(collection(db, "favorites"), {
-      projectId, uid: currentUser.uid, timestamp: Date.now()
-    });
-    showToast("Favorilere eklendi! 🔖", "success");
+  const btn = document.getElementById(`fav-btn-${projectId}`);
+  if (btn) btn.disabled = true; // İşlem bitene kadar butonu kilitle
+
+  try {
+    const favId  = `${projectId}_${currentUser.uid}`;
+    const snap   = await getDocs(collection(db, "favorites"));
+    const exists = snap.docs.some(d => d.id === favId);
+
+    if (exists) {
+      await deleteDoc(doc(db, "favorites", favId));
+      showToast("Favorilerden kaldırıldı.", "info");
+    } else {
+      await addDoc(collection(db, "favorites"), {
+        projectId,
+        uid: currentUser.uid,
+        timestamp: Date.now()
+      });
+      showToast("Favorilere eklendi! 🔖", "success");
+    }
+    await loadProjectsFromFirestore();
+  } catch(e) {
+    showToast("İşlem başarısız!", "error");
+  } finally {
+    if (btn) btn.disabled = false; // İşlem bitince butonu aç
   }
-  await loadProjectsFromFirestore();
 }
 
 /* ===== YORUM EKLE ===== */
