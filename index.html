@@ -407,9 +407,18 @@
 
 
     <div id="admin-manage" class="admin-panel-section">
-      <h3 style="font-family:var(--font-display);font-size:1.1rem;margin-bottom:1rem;">Yüklenen Projeler</h3>
-      <div id="admin-project-list"></div>
-    </div>
+  <h3 style="font-family:var(--font-display);font-size:1.1rem;margin-bottom:1rem;">Yüklenen Projeler</h3>
+  <div id="admin-project-list"></div>
+</div>
+
+<!-- ADMİN YORUM YÖNETİMİ MODALI -->
+<div class="modal-overlay" id="admin-comments-modal">
+  <div class="modal modal-lg">
+    <button class="modal-close" onclick="closeModal('admin-comments-modal')">✕</button>
+    <h2><i class="fas fa-comments" style="color:var(--blue-primary)"></i> <span id="admin-comments-title">Yorumlar</span></h2>
+    <div id="admin-comments-list" style="max-height:60vh;overflow-y:auto;"></div>
+  </div>
+</div>
   </div>
 </div>
 

@@ -865,29 +865,117 @@ function renderAdminProjectList() {
   const el = document.getElementById("admin-project-list");
   if (!projects.length) { el.innerHTML = `<p style="color:var(--text-muted)">Henüz proje yok.</p>`; return; }
   el.innerHTML = projects.map(p => `
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;
-      background:var(--surface2);border-radius:var(--radius-sm);margin-bottom:8px;gap:1rem;">
-      <div>
-        <strong style="font-family:var(--font-display)">${p.title}</strong>
-        <span style="font-size:0.78rem;color:var(--text-muted);margin-left:10px">${p.date}</span>
+    <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:1rem;margin-bottom:0.8rem;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
+        <div>
+          <strong style="font-family:var(--font-display)">${p.title}</strong>
+          <span style="font-size:0.78rem;color:var(--text-muted);margin-left:10px">${p.date}</span>
+        </div>
+        <button class="btn btn-sm" style="background:#fee2e2;color:#ef4444;border:none;border-radius:8px"
+          onclick="deleteProject('${p.id}')">
+          <i class="fas fa-trash"></i> Sil
+        </button>
       </div>
-      <button class="btn btn-sm" style="background:#fee2e2;color:#ef4444;border:none;border-radius:8px"
-        onclick="deleteProject('${p.id}')">
-        <i class="fas fa-trash"></i>
-      </button>
+      <!-- Moderasyon butonları -->
+      <div style="display:flex;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap;">
+        <button class="btn btn-sm" style="background:var(--blue-light);color:var(--blue-primary);border:none;border-radius:8px"
+          onclick="adminViewComments('${p.id}', '${p.title}')">
+          <i class="fas fa-comments"></i> Yorumlar
+          <span style="font-size:0.75rem;opacity:0.8">(${p.commentCount || 0})</span>
+        </button>
+        <button class="btn btn-sm" style="background:#fef9ee;color:#d97706;border:none;border-radius:8px"
+          onclick="adminResetLikes('${p.id}')">
+          <i class="fas fa-heart-broken"></i> Beğenileri Sıfırla
+          <span style="font-size:0.75rem;opacity:0.8">(${p.likeCount || 0})</span>
+        </button>
+        <button class="btn btn-sm" style="background:#f0fdf4;color:#16a34a;border:none;border-radius:8px"
+          onclick="adminResetFavorites('${p.id}')">
+          <i class="fas fa-bookmark"></i> Favorileri Sıfırla
+          <span style="font-size:0.75rem;opacity:0.8">(${p.favCount || 0})</span>
+        </button>
+      </div>
     </div>`).join("");
 }
 
-async function deleteProject(id) {
-  if (!confirm("Bu projeyi silmek istediğinden emin misin?")) return;
-  try {
-    await deleteDoc(doc(db, "projects", id));
-    await loadProjectsFromFirestore();
-    renderAdminProjectList();
-    showToast("Proje silindi.", "info");
-  } catch(e) {
-    showToast("Silme işlemi başarısız!", "error");
+/* ===== ADMİN YORUM YÖNETİMİ ===== */
+async function adminViewComments(projectId, title) {
+  document.getElementById("admin-comments-title").textContent = title + " — Yorumlar";
+  const el = document.getElementById("admin-comments-list");
+  el.innerHTML = `<p style="color:var(--text-muted)">Yükleniyor...</p>`;
+  openModal("admin-comments-modal");
+
+  const q    = query(collection(db, "comments"), orderBy("timestamp", "asc"));
+  const snap = await getDocs(q);
+  const comments = snap.docs.filter(d => d.data().projectId === projectId);
+
+  if (!comments.length) {
+    el.innerHTML = `<p style="color:var(--text-muted);text-align:center;padding:1.5rem">Bu projede henüz yorum yok.</p>`;
+    return;
   }
+
+  el.innerHTML = `
+    <div style="display:flex;justify-content:flex-end;margin-bottom:1rem;">
+      <button class="btn btn-sm" style="background:#fee2e2;color:#ef4444;border:none"
+        onclick="adminDeleteAllComments('${projectId}')">
+        <i class="fas fa-trash"></i> Tüm Yorumları Sil
+      </button>
+    </div>` +
+    comments.map(d => {
+      const c = d.data();
+      return `
+        <div class="comment-item" style="padding:0.8rem;background:var(--surface2);border-radius:var(--radius-sm);margin-bottom:0.5rem;">
+          <img class="comment-avatar" src="${c.avatar || ''}" onerror="this.style.display='none'" alt=""/>
+          <div style="flex:1">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.3rem;">
+              <span class="comment-name">${c.name || 'Anonim'}</span>
+              <span class="comment-date">${c.date}</span>
+            </div>
+            <p class="comment-text">${c.text}</p>
+          </div>
+          <button onclick="adminDeleteComment('${d.id}', '${projectId}', '${title}')"
+            style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:0.85rem;padding:4px;flex-shrink:0">
+            <i class="fas fa-trash"></i>
+          </button>
+        </div>`;
+    }).join("");
+}
+
+async function adminDeleteComment(commentId, projectId, title) {
+  if (!confirm("Bu yorumu silmek istediğinden emin misin?")) return;
+  await deleteDoc(doc(db, "comments", commentId));
+  showToast("Yorum silindi.", "info");
+  await loadProjectsFromFirestore();
+  adminViewComments(projectId, title);
+}
+
+async function adminDeleteAllComments(projectId) {
+  if (!confirm("Bu projedeki TÜM yorumları silmek istediğinden emin misin?")) return;
+  const snap = await getDocs(collection(db, "comments"));
+  const toDelete = snap.docs.filter(d => d.data().projectId === projectId);
+  await Promise.all(toDelete.map(d => deleteDoc(doc(db, "comments", d.id))));
+  showToast(`${toDelete.length} yorum silindi.`, "info");
+  await loadProjectsFromFirestore();
+  adminViewComments(projectId, "");
+}
+
+async function adminResetLikes(projectId) {
+  if (!confirm("Bu projenin TÜM beğenilerini sıfırlamak istediğinden emin misin?")) return;
+  const snap = await getDocs(collection(db, "likes"));
+  const toDelete = snap.docs.filter(d => d.data().projectId === projectId);
+  await Promise.all(toDelete.map(d => deleteDoc(doc(db, "likes", d.id))));
+  showToast(`${toDelete.length} beğeni sıfırlandı.`, "info");
+  await loadProjectsFromFirestore();
+  renderAdminProjectList();
+}
+
+async function adminResetFavorites(projectId) {
+  if (!confirm("Bu projenin TÜM favorilerini sıfırlamak istediğinden emin misin?")) return;
+  const snap = await getDocs(collection(db, "favorites"));
+  const toDelete = snap.docs.filter(d => d.data().projectId === projectId);
+  await Promise.all(toDelete.map(d => deleteDoc(doc(db, "favorites", d.id))));
+  showToast(`${toDelete.length} favori sıfırlandı.`, "info");
+  await loadProjectsFromFirestore();
+  renderAdminProjectList();
 }
 
 function showToast(msg, type = "info") {
@@ -909,6 +997,13 @@ document.getElementById("login-pass").addEventListener("keydown", e => {
    onclick="" çağrılarının çalışması için fonksiyonları
    window objesine bağlamak gerekiyor.
 ============================================================= */
+
+window.adminViewComments     = adminViewComments;
+window.adminDeleteComment    = adminDeleteComment;
+window.adminDeleteAllComments= adminDeleteAllComments;
+window.adminResetLikes       = adminResetLikes;
+window.adminResetFavorites   = adminResetFavorites;
+
 window.openModal         = openModal;
 window.closeModal        = closeModal;
 window.attemptLogin      = attemptLogin;
