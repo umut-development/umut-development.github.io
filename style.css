@@ -1099,3 +1099,14 @@ textarea.form-control {
   flex: 1;
   margin-bottom: 0.8rem;
 }
+
+
+/*------------*/
+
+/* Mesaj gönder butonu ve giriş hint metni — ortala */
+#message-btn-wrap {
+  text-align: center;
+}
+#message-login-hint {
+  text-align: center;
+}

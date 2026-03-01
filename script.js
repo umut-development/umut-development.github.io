@@ -8,8 +8,11 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, query, orderBy }
+
+
+  import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, updateDoc, onSnapshot }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
 
 const CLOUDINARY_CLOUD = "dhfbwzn9t";
 const CLOUDINARY_PRESET = "umut_dev_uploads";
@@ -47,6 +50,8 @@ onAuthStateChanged(auth, (user) => {
     document.getElementById("user-info").style.display = "none";
     document.getElementById("message-btn-wrap").style.display = "none";
     document.getElementById("message-login-hint").style.display = "";
+    document.getElementById("notif-btn").style.display = "none";
+document.getElementById("notif-badge").style.display = "none";
   } else {
     document.getElementById("google-btn").style.display = "none";
     document.getElementById("user-info").style.display = "flex";
@@ -54,11 +59,17 @@ onAuthStateChanged(auth, (user) => {
     document.getElementById("user-name").textContent = user.displayName || user.email;
     document.getElementById("message-btn-wrap").style.display = "block";
     document.getElementById("message-login-hint").style.display = "none";
+    document.getElementById("notif-btn").style.display = "block";
+listenForReplies(user.uid);
   }
   renderProjects(); // Beğeni ve favori durumlarını güncelle
 });
 
-function openModal(id)  { document.getElementById(id).classList.add("open"); }
+function openModal(id) {
+  document.getElementById(id).classList.add("open");
+  if (id === "inbox-modal") renderInbox();
+}
+
 function closeModal(id) { document.getElementById(id).classList.remove("open"); }
 
 function switchVideoTab(mode, btn) {
@@ -490,6 +501,8 @@ async function sendMessage() {
   }
 }
 
+
+
 /* ===== ADMİN MESAJLARINI RENDER ET ===== */
 async function renderMessages() {
   const el = document.getElementById("messages-list");
@@ -497,12 +510,30 @@ async function renderMessages() {
   try {
     const q = query(collection(db, "messages"), orderBy("timestamp","desc"));
     const snap = await getDocs(q);
+
     if (!snap.docs.length) {
       el.innerHTML = `<p style="color:var(--text-muted)">Henüz mesaj yok.</p>`;
       return;
     }
-    el.innerHTML = snap.docs.map(d => {
+
+    const msgHtmlArr = await Promise.all(snap.docs.map(async d => {
       const m = d.data();
+
+      /* Cevapları çek */
+      const repliesSnap = await getDocs(
+        query(collection(db, "messages", d.id, "replies"), orderBy("timestamp","asc"))
+      );
+      const repliesHtml = repliesSnap.docs.map(r => {
+        const rep = r.data();
+        return `
+          <div style="background:var(--blue-light);border-radius:var(--radius-sm);padding:0.6rem 1rem;margin-top:0.5rem;">
+            <p style="font-size:0.75rem;font-weight:700;color:var(--blue-primary);margin-bottom:0.2rem">
+              <i class="fas fa-reply"></i> Admin cevabı — ${rep.date}
+            </p>
+            <p style="font-size:0.85rem;color:var(--text)">${rep.text}</p>
+          </div>`;
+      }).join("");
+
       return `
         <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:1rem;margin-bottom:0.8rem;border-left:4px solid ${m.read ? 'var(--border)' : 'var(--blue-primary)'}">
           <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;flex-wrap:wrap;">
@@ -514,27 +545,171 @@ async function renderMessages() {
             <span style="font-size:0.75rem;color:var(--text-muted);margin-left:auto">${m.date}</span>
           </div>
           <p style="font-weight:700;margin-bottom:0.3rem">${m.subject}</p>
-          <p style="font-size:0.88rem;color:var(--text-muted)">${m.body}</p>
-          ${!m.read ? `<button class="btn btn-sm" style="margin-top:0.5rem;background:var(--blue-light);color:var(--blue-primary);border:none" onclick="markRead('${d.id}')">✓ Okundu İşaretle</button>` : '<span style="font-size:0.75rem;color:var(--text-muted)">✓ Okundu</span>'}
+          <p style="font-size:0.88rem;color:var(--text-muted);margin-bottom:0.8rem">${m.body}</p>
+
+          <!-- Önceki cevaplar -->
+          ${repliesHtml}
+
+          <!-- Cevap yazma alanı -->
+          <div style="display:flex;gap:0.5rem;margin-top:0.8rem;">
+            <input id="reply-input-${d.id}" class="form-control" 
+              style="font-size:14px;padding:8px 12px" 
+              placeholder="Cevabını yaz..."/>
+            <button class="btn btn-primary btn-sm" onclick="replyMessage('${d.id}')">
+              <i class="fas fa-reply"></i> Cevapla
+            </button>
+          </div>
+
+          ${!m.read ? `<button class="btn btn-sm" style="margin-top:0.5rem;background:var(--blue-light);color:var(--blue-primary);border:none" onclick="markRead('${d.id}')">✓ Okundu İşaretle</button>` : '<span style="font-size:0.75rem;color:var(--text-muted);margin-top:0.5rem;display:block">✓ Okundu</span>'}
         </div>`;
-    }).join("");
+    }));
+
+    el.innerHTML = msgHtmlArr.join("");
 
     /* Okunmamış badge */
     const unread = snap.docs.filter(d => !d.data().read).length;
     const badge = document.getElementById("unread-badge");
     if (unread > 0) { badge.textContent = unread; badge.style.display = "inline"; }
     else { badge.style.display = "none"; }
+
   } catch(e) {
     el.innerHTML = `<p style="color:#ef4444">Mesajlar yüklenemedi.</p>`;
   }
 }
 
+
+
+
 async function markRead(msgId) {
-  await addDoc(collection(db, "messages"), {});
-  const ref = doc(db, "messages", msgId);
-  await deleteDoc(ref);
-  await addDoc(collection(db, "messages"), { read: true });
-  renderMessages();
+  try {
+    await updateDoc(doc(db, "messages", msgId), { read: true });
+    renderMessages();
+  } catch(e) {
+    showToast("İşlem başarısız!", "error");
+  }
+}
+
+/* ===== ADMIN CEVAP VER ===== */
+async function replyMessage(msgId) {
+  const input = document.getElementById(`reply-input-${msgId}`);
+  const text  = input.value.trim();
+  if (!text) { showToast("Cevap boş olamaz!", "error"); return; }
+  try {
+    await addDoc(collection(db, "messages", msgId, "replies"), {
+      text,
+      from:      "admin",
+      name:      "Umut Development",
+      timestamp: Date.now(),
+      date:      new Date().toLocaleDateString("tr-TR"),
+      readByUser: false
+    });
+    await updateDoc(doc(db, "messages", msgId), { read: true, hasReply: true });
+    input.value = "";
+    showToast("Cevap gönderildi! ✅", "success");
+    renderMessages();
+  } catch(e) {
+    showToast("Cevap gönderilemedi!", "error");
+  }
+}
+
+/* ===== GELEN KUTUSUNU RENDER ET (Kullanıcı) ===== */
+async function renderInbox() {
+  if (!currentUser) return;
+  const el = document.getElementById("inbox-list");
+  el.innerHTML = `<p style="color:var(--text-muted)">Yükleniyor...</p>`;
+
+  try {
+    const q = query(collection(db, "messages"), orderBy("timestamp", "desc"));
+    const snap = await getDocs(q);
+
+    /* Sadece bu kullanıcının mesajlarını filtrele */
+    const myMsgs = snap.docs.filter(d => d.data().uid === currentUser.uid);
+
+    if (!myMsgs.length) {
+      el.innerHTML = `<p style="color:var(--text-muted);text-align:center;padding:2rem">Henüz mesajın yok.</p>`;
+      return;
+    }
+
+    /* Her mesaj için cevapları da çek */
+    const msgHtmlArr = await Promise.all(myMsgs.map(async d => {
+      const m = d.data();
+      const repliesSnap = await getDocs(
+        query(collection(db, "messages", d.id, "replies"), orderBy("timestamp","asc"))
+      );
+
+      /* Cevapları okundu olarak işaretle */
+      repliesSnap.docs.forEach(async r => {
+        if (!r.data().readByUser) {
+          await updateDoc(doc(db, "messages", d.id, "replies", r.id), { readByUser: true });
+        }
+      });
+
+      const repliesHtml = repliesSnap.docs.map(r => {
+        const rep = r.data();
+        return `
+          <div style="display:flex;justify-content:flex-start;margin-top:0.6rem;">
+            <div style="background:var(--blue-light);border-radius:12px 12px 12px 0;padding:0.6rem 1rem;max-width:80%;">
+              <p style="font-size:0.75rem;font-weight:700;color:var(--blue-primary);margin-bottom:0.2rem">${rep.name}</p>
+              <p style="font-size:0.85rem;color:var(--text)">${rep.text}</p>
+              <p style="font-size:0.7rem;color:var(--text-muted);margin-top:0.2rem">${rep.date}</p>
+            </div>
+          </div>`;
+      }).join("");
+
+      return `
+        <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:1rem;margin-bottom:1rem;">
+          <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:0.3rem;margin-bottom:0.5rem;">
+            <strong style="font-family:var(--font-display)">${m.subject}</strong>
+            <span style="font-size:0.75rem;color:var(--text-muted)">${m.date}</span>
+          </div>
+
+          <!-- Kullanıcının mesajı — sağda -->
+          <div style="display:flex;justify-content:flex-end;margin-bottom:0.3rem;">
+            <div style="background:var(--blue-primary);border-radius:12px 12px 0 12px;padding:0.6rem 1rem;max-width:80%;">
+              <p style="font-size:0.85rem;color:white">${m.body}</p>
+              <p style="font-size:0.7rem;color:rgba(255,255,255,0.7);margin-top:0.2rem">${m.date}</p>
+            </div>
+          </div>
+
+          <!-- Admin cevapları — solda -->
+          ${repliesHtml || `<p style="font-size:0.82rem;color:var(--text-muted);text-align:center;padding:0.5rem">Henüz cevap verilmedi...</p>`}
+        </div>`;
+    }));
+
+    el.innerHTML = msgHtmlArr.join("");
+
+    /* Badge'i sıfırla */
+    document.getElementById("notif-badge").style.display = "none";
+
+  } catch(e) {
+    el.innerHTML = `<p style="color:#ef4444">Yüklenemedi.</p>`;
+  }
+}
+
+/* ===== CEVAP BİLDİRİMİ DİNLE (Kullanıcı) ===== */
+function listenForReplies(uid) {
+  const q = query(collection(db, "messages"), orderBy("timestamp","desc"));
+  onSnapshot(q, async snap => {
+    const myMsgs = snap.docs.filter(d => d.data().uid === uid);
+    let unreadReplies = 0;
+
+    await Promise.all(myMsgs.map(async d => {
+      const repliesSnap = await getDocs(
+        collection(db, "messages", d.id, "replies")
+      );
+      repliesSnap.docs.forEach(r => {
+        if (!r.data().readByUser) unreadReplies++;
+      });
+    }));
+
+    const badge = document.getElementById("notif-badge");
+    if (unreadReplies > 0) {
+      badge.textContent = unreadReplies;
+      badge.style.display = "flex";
+    } else {
+      badge.style.display = "none";
+    }
+  });
 }
 
 function extractYoutubeId(url) {
@@ -703,7 +878,8 @@ function escapeHtml(str) {
 
 window.showCodeModal = showCodeModal;
 window.downloadCode  = downloadCode;
-
+window.replyMessage  = replyMessage;
+window.renderInbox   = renderInbox;
 window.googleLogin      = googleLogin;
 window.googleLogout     = googleLogout;
 window.toggleLike       = toggleLike;
