@@ -968,6 +968,18 @@ async function adminResetLikes(projectId) {
   renderAdminProjectList();
 }
 
+async function deleteProject(id) {
+  if (!confirm("Bu projeyi silmek istediğinden emin misin?")) return;
+  try {
+    await deleteDoc(doc(db, "projects", id));
+    await loadProjectsFromFirestore();
+    renderAdminProjectList();
+    showToast("Proje silindi.", "info");
+  } catch(e) {
+    showToast("Silme işlemi başarısız!", "error");
+  }
+}
+
 async function adminResetFavorites(projectId) {
   if (!confirm("Bu projenin TÜM favorilerini sıfırlamak istediğinden emin misin?")) return;
   const snap = await getDocs(collection(db, "favorites"));
@@ -1003,6 +1015,7 @@ window.adminDeleteComment    = adminDeleteComment;
 window.adminDeleteAllComments= adminDeleteAllComments;
 window.adminResetLikes       = adminResetLikes;
 window.adminResetFavorites   = adminResetFavorites;
+window.deleteProject = deleteProject;
 
 window.openModal         = openModal;
 window.closeModal        = closeModal;
