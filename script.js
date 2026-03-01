@@ -582,7 +582,12 @@ async function renderMessages() {
             </button>
           </div>
 
-          ${!m.read ? `<button class="btn btn-sm" style="margin-top:0.5rem;background:var(--blue-light);color:var(--blue-primary);border:none" onclick="markRead('${d.id}')">✓ Okundu İşaretle</button>` : '<span style="font-size:0.75rem;color:var(--text-muted);margin-top:0.5rem;display:block">✓ Okundu</span>'}
+          <div style="display:flex;gap:0.5rem;margin-top:0.5rem;flex-wrap:wrap;align-items:center;">
+  ${!m.read ? `<button class="btn btn-sm" style="background:var(--blue-light);color:var(--blue-primary);border:none" onclick="markRead('${d.id}')">✓ Okundu İşaretle</button>` : '<span style="font-size:0.75rem;color:var(--text-muted)">✓ Okundu</span>'}
+  <button class="btn btn-sm" style="background:#fee2e2;color:#ef4444;border:none" onclick="adminDeleteMessage('${d.id}')">
+    <i class="fas fa-trash"></i> Sil
+  </button>
+</div>
         </div>`;
     }));
 
@@ -987,6 +992,17 @@ async function adminResetLikes(projectId) {
   renderAdminProjectList();
 }
 
+async function adminDeleteMessage(msgId) {
+  if (!confirm("Bu mesajı silmek istediğinden emin misin?")) return;
+  try {
+    await deleteDoc(doc(db, "messages", msgId));
+    showToast("Mesaj silindi.", "info");
+    renderMessages();
+  } catch(e) {
+    showToast("Silme başarısız!", "error");
+  }
+}
+
 async function deleteProject(id) {
   if (!confirm("Bu projeyi silmek istediğinden emin misin?")) return;
   try {
@@ -1035,6 +1051,7 @@ window.adminDeleteAllComments= adminDeleteAllComments;
 window.adminResetLikes       = adminResetLikes;
 window.adminResetFavorites   = adminResetFavorites;
 window.deleteProject = deleteProject;
+window.adminDeleteMessage = adminDeleteMessage;
 
 window.openModal         = openModal;
 window.closeModal        = closeModal;
