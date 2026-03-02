@@ -411,6 +411,88 @@
   <div id="admin-project-list"></div>
 </div>
 
+<!-- PROJE DÜZENLEME MODALI -->
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal modal-lg">
+    <button class="modal-close" onclick="closeModal('edit-modal')">✕</button>
+    <h2><i class="fas fa-edit" style="color:var(--blue-primary)"></i> Projeyi Düzenle</h2>
+    <input type="hidden" id="edit-project-id"/>
+
+    <!-- Kategori -->
+    <div class="form-group">
+      <label>Ana Kategori</label>
+      <div class="cat-row">
+        <button class="cat-btn" id="edit-cat-iot" onclick="selectEditCat('iot', this)">🔌 IoT Projeleri</button>
+        <button class="cat-btn" id="edit-cat-web" onclick="selectEditCat('web', this)">🌐 Web Projeleri</button>
+      </div>
+    </div>
+    <div class="form-group" id="edit-subcat-wrap" style="display:none">
+      <label>Alt Kategori (Web)</label>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+        <button class="cat-btn" id="edit-sub-web-full"    onclick="selectEditSubCat('web-full', this)">Tam Web Sitesi</button>
+        <button class="cat-btn" id="edit-sub-web-loading" onclick="selectEditSubCat('web-loading', this)">Yüklenme Ekranları</button>
+        <button class="cat-btn" id="edit-sub-web-login"   onclick="selectEditSubCat('web-login', this)">Giriş Ekranları</button>
+      </div>
+    </div>
+
+    <!-- Başlık -->
+    <div class="form-group">
+      <label>Başlık</label>
+      <input class="form-control" type="text" id="edit-title" placeholder="Proje başlığı"/>
+    </div>
+
+    <!-- Açıklama -->
+    <div class="form-group">
+      <label>Açıklama</label>
+      <textarea class="form-control" id="edit-desc" placeholder="Proje açıklaması..."></textarea>
+    </div>
+
+    <!-- Görsel -->
+    <div class="form-group">
+      <label>Görsel (değiştirmek istemiyorsan boş bırak)</label>
+      <input class="form-control" type="file" id="edit-file" accept="image/*,.pdf"/>
+      <div id="edit-current-img" style="margin-top:0.5rem;"></div>
+    </div>
+
+    <!-- Video -->
+    <div class="form-group">
+      <label>Video</label>
+      <div class="video-tabs">
+        <button class="video-tab active" id="edit-video-tab-url" onclick="switchEditVideoTab('url', this)">
+          <i class="fab fa-youtube"></i> YouTube URL
+        </button>
+        <button class="video-tab" id="edit-video-tab-file" onclick="switchEditVideoTab('file', this)">
+          <i class="fas fa-file-video"></i> Dosya Yükle (.mp4)
+        </button>
+        <button class="video-tab" id="edit-video-tab-none" onclick="switchEditVideoTab('none', this)">
+          <i class="fas fa-times"></i> Video Kaldır
+        </button>
+      </div>
+      <div class="video-input-panel active" id="edit-video-url-panel">
+        <input class="form-control" type="url" id="edit-video-url" placeholder="https://youtube.com/watch?v=..."/>
+      </div>
+      <div class="video-input-panel" id="edit-video-file-panel">
+        <input class="form-control" type="file" id="edit-video-file" accept="video/mp4,video/*"/>
+      </div>
+      <div class="video-input-panel" id="edit-video-none-panel">
+        <p style="font-size:0.85rem;color:#ef4444;margin-top:0.4rem">⚠️ Kaydet butonuna basınca mevcut video kaldırılır.</p>
+      </div>
+    </div>
+
+    <!-- Kaynak Kodu -->
+    <div class="form-group">
+      <label>Kaynak Kodu (değiştirmek istemiyorsan boş bırak)</label>
+      <input class="form-control" type="file" id="edit-code"
+        accept=".zip,.py,.ino,.js,.ts,.cpp,.c,.h,.java,.html,.css,.json,.txt,.md"/>
+      <div id="edit-current-code" style="margin-top:0.5rem;font-size:0.82rem;color:var(--text-muted);"></div>
+    </div>
+
+    <button class="btn btn-primary" style="width:100%" onclick="updateProject()">
+      <i class="fas fa-save"></i> Değişiklikleri Kaydet
+    </button>
+  </div>
+</div>
+
 <!-- ADMİN YORUM YÖNETİMİ MODALI -->
 <div class="modal-overlay" id="admin-comments-modal">
   <div class="modal modal-lg">

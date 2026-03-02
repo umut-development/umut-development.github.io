@@ -895,10 +895,16 @@ function renderAdminProjectList() {
           <strong style="font-family:var(--font-display)">${p.title}</strong>
           <span style="font-size:0.78rem;color:var(--text-muted);margin-left:10px">${p.date}</span>
         </div>
-        <button class="btn btn-sm" style="background:#fee2e2;color:#ef4444;border:none;border-radius:8px"
-          onclick="deleteProject('${p.id}')">
-          <i class="fas fa-trash"></i> Sil
-        </button>
+<div style="display:flex;gap:0.5rem;">
+  <button class="btn btn-sm" style="background:var(--blue-light);color:var(--blue-primary);border:none;border-radius:8px"
+    onclick="openEditModal('${p.id}')">
+    <i class="fas fa-edit"></i> Düzenle
+  </button>
+  <button class="btn btn-sm" style="background:#fee2e2;color:#ef4444;border:none;border-radius:8px"
+    onclick="deleteProject('${p.id}')">
+    <i class="fas fa-trash"></i> Sil
+  </button>
+</div>
       </div>
       <!-- Moderasyon butonları -->
       <div style="display:flex;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap;">
@@ -1003,6 +1009,167 @@ async function adminDeleteMessage(msgId) {
   }
 }
 
+/* Düzenleme modalında seçili kategori */
+let editCat    = null;
+let editSubCat = null;
+let editVideoMode = "url";
+
+function openEditModal(projectId) {
+  const p = projects.find(pr => pr.id === projectId);
+  if (!p) return;
+
+  /* Mevcut değerleri doldur */
+  document.getElementById("edit-project-id").value = projectId;
+  document.getElementById("edit-title").value       = p.title || "";
+  document.getElementById("edit-desc").value        = p.desc  || "";
+  document.getElementById("edit-video-url").value   = p.videoUrl || "";
+  document.getElementById("edit-file").value        = "";
+  document.getElementById("edit-code").value        = "";
+
+  /* Mevcut görseli göster */
+  const imgWrap = document.getElementById("edit-current-img");
+  imgWrap.innerHTML = p.fileUrl
+    ? `<img src="${p.fileUrl}" style="height:60px;border-radius:8px;object-fit:cover"/> <span style="font-size:0.78rem;color:var(--text-muted)">Mevcut görsel</span>`
+    : "";
+
+  /* Mevcut kod dosyasını göster */
+  document.getElementById("edit-current-code").textContent = p.codeName
+    ? `📁 Mevcut: ${p.codeName}`
+    : "";
+
+  /* Kategori seç */
+  editCat    = p.cat;
+  editSubCat = p.subCat || null;
+  document.querySelectorAll("#edit-modal .cat-btn").forEach(b => b.classList.remove("selected"));
+  const catBtn = document.getElementById(`edit-cat-${p.cat}`);
+  if (catBtn) catBtn.classList.add("selected");
+
+  if (p.cat === "web") {
+    document.getElementById("edit-subcat-wrap").style.display = "block";
+    const subBtn = document.getElementById(`edit-sub-${p.subCat}`);
+    if (subBtn) subBtn.classList.add("selected");
+  } else {
+    document.getElementById("edit-subcat-wrap").style.display = "none";
+  }
+
+  /* Video modu */
+  editVideoMode = p.videoUrl ? "url" : p.vidUrl ? "file" : "url";
+  switchEditVideoTab(editVideoMode, document.getElementById(`edit-video-tab-${editVideoMode}`));
+
+  openModal("edit-modal");
+}
+
+function selectEditCat(cat, btn) {
+  editCat = cat; editSubCat = null;
+  document.querySelectorAll("#edit-modal .cat-btn").forEach(b => {
+    if (!b.getAttribute("onclick").includes("SubCat")) b.classList.remove("selected");
+  });
+  btn.classList.add("selected");
+  document.getElementById("edit-subcat-wrap").style.display = cat === "web" ? "block" : "none";
+  document.querySelectorAll("#edit-modal #edit-subcat-wrap .cat-btn").forEach(b => b.classList.remove("selected"));
+}
+
+function selectEditSubCat(sub, btn) {
+  editSubCat = sub;
+  document.querySelectorAll("#edit-modal #edit-subcat-wrap .cat-btn").forEach(b => b.classList.remove("selected"));
+  btn.classList.add("selected");
+}
+
+function switchEditVideoTab(mode, btn) {
+  editVideoMode = mode;
+  document.querySelectorAll("#edit-modal .video-tab").forEach(b => b.classList.remove("active"));
+  document.querySelectorAll("#edit-modal .video-input-panel").forEach(p => p.classList.remove("active"));
+  if (btn) btn.classList.add("active");
+  document.getElementById(`edit-video-${mode}-panel`).classList.add("active");
+}
+
+async function updateProject() {
+  const projectId = document.getElementById("edit-project-id").value;
+  const title     = document.getElementById("edit-title").value.trim();
+  const desc      = document.getElementById("edit-desc").value.trim();
+  const imgFile   = document.getElementById("edit-file").files[0];
+  const videoUrl  = document.getElementById("edit-video-url").value.trim();
+  const videoFile = document.getElementById("edit-video-file").files[0];
+  const codeFile  = document.getElementById("edit-code").files[0];
+
+  if (!title)    { showToast("Başlık boş olamaz!", "error"); return; }
+  if (!editCat)  { showToast("Kategori seçmelisin!", "error"); return; }
+  if (editCat === "web" && !editSubCat) { showToast("Alt kategori seçmelisin!", "error"); return; }
+
+  showToast("Güncelleniyor... ⏳", "info");
+
+  try {
+    const p = projects.find(pr => pr.id === projectId);
+    let fileUrl  = p.fileUrl  || null;
+    let vidUrl   = p.vidUrl   || null;
+    let codeData = p.codeData || null;
+    let codeName = p.codeName || null;
+    let codeIsText = p.codeIsText || false;
+
+    /* Yeni görsel yüklendiyse Cloudinary'ye at */
+    if (imgFile) {
+      showToast("Görsel yükleniyor... ⏳", "info");
+      fileUrl = await uploadToCloudinary(imgFile, "image");
+    }
+
+    /* Video modu */
+    let finalVideoUrl = null;
+    if (editVideoMode === "url") {
+      finalVideoUrl = videoUrl;
+      vidUrl = null;
+    } else if (editVideoMode === "file" && videoFile) {
+      showToast("Video yükleniyor... ⏳", "info");
+      vidUrl = await uploadToCloudinary(videoFile, "video");
+      finalVideoUrl = null;
+    } else if (editVideoMode === "none") {
+      vidUrl = null;
+      finalVideoUrl = null;
+    } else {
+      finalVideoUrl = p.videoUrl || null;
+    }
+
+    /* Yeni kod dosyası yüklendiyse */
+    if (codeFile) {
+      codeName = codeFile.name;
+      const isText = /\.(py|ino|js|ts|cpp|c|h|java|html|css|json|txt|md)$/i.test(codeFile.name);
+      codeIsText = isText;
+      if (isText) {
+        codeData = await new Promise(res => {
+          const r = new FileReader();
+          r.onload = e => res(e.target.result);
+          r.readAsText(codeFile);
+        });
+      } else {
+        codeData = await uploadToCloudinary(codeFile, "raw");
+      }
+    }
+
+    /* Firestore'u güncelle */
+    await updateDoc(doc(db, "projects", projectId), {
+      title,
+      desc,
+      fileUrl,
+      videoUrl:   finalVideoUrl,
+      vidUrl,
+      codeData,
+      codeName,
+      codeIsText,
+      cat:        editCat,
+      subCat:     editSubCat,
+    });
+
+    closeModal("edit-modal");
+    await loadProjectsFromFirestore();
+    renderAdminProjectList();
+    showToast("Proje güncellendi! ✅", "success");
+
+  } catch(e) {
+    console.error("Güncelleme hatası:", e);
+    showToast("Güncelleme başarısız: " + e.message, "error");
+  }
+}
+
+
 async function deleteProject(id) {
   if (!confirm("Bu projeyi silmek istediğinden emin misin?")) return;
   try {
@@ -1052,6 +1219,12 @@ window.adminResetLikes       = adminResetLikes;
 window.adminResetFavorites   = adminResetFavorites;
 window.deleteProject = deleteProject;
 window.adminDeleteMessage = adminDeleteMessage;
+
+window.openEditModal     = openEditModal;
+window.selectEditCat     = selectEditCat;
+window.selectEditSubCat  = selectEditSubCat;
+window.switchEditVideoTab= switchEditVideoTab;
+window.updateProject     = updateProject;
 
 window.openModal         = openModal;
 window.closeModal        = closeModal;
