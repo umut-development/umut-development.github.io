@@ -51,6 +51,9 @@ onAuthStateChanged(auth, (user) => {
     document.getElementById("message-login-hint").style.display = "";
     document.getElementById("notif-btn").style.display = "none";
 document.getElementById("notif-badge").style.display = "none";
+//SİLİNEBİLİR
+startNotificationListener(user.uid);
+//SİLİNEBİLİR
   } else {
     document.getElementById("google-btn").style.display = "none";
     document.getElementById("user-info").style.display = "flex";
@@ -1204,6 +1207,37 @@ function showToast(msg, type = "info") {
 document.getElementById("login-pass").addEventListener("keydown", e => {
   if (e.key === "Enter") attemptLogin();
 });
+
+/* SİLİNEBİLİR */
+// 1. Canlı Bildirim Takibi
+function startNotificationListener(uid) {
+  const q = query(collection(db, "messages"), where("receiverUid", "==", uid), where("read", "==", false));
+  
+  onSnapshot(q, (snapshot) => {
+    const count = snapshot.size;
+    const badge = document.getElementById("notif-badge");
+    const light = document.getElementById("notif-light");
+
+    if (count > 0) {
+      badge.textContent = count;
+      badge.style.display = "block";
+      light.style.display = "block";
+    } else {
+      badge.style.display = "none";
+      light.style.display = "none";
+    }
+  });
+}
+
+// 2. Gelen Kutusunu Aç ve Mesajları "Okundu" İşaretle
+window.openInboxModal = async () => {
+  if (!currentUser) return showToast("Lütfen önce giriş yapın", "error");
+  
+  document.getElementById("inbox-modal").classList.add("open");
+  // Firebase'den mesajları çek ve listele (renderInbox fonksiyonu burada çağrılır)
+  // Bu sırada tüm receiverUid == currentUser.uid olanları "read: true" yap
+};
+/* silinebilir */
 
 /* =============================================================
    GLOBAL FONKSİYONLAR
