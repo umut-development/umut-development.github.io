@@ -51,7 +51,6 @@ onAuthStateChanged(auth, (user) => {
     document.getElementById("message-login-hint").style.display = "";
     document.getElementById("notif-btn").style.display = "none";
 document.getElementById("notif-badge").style.display = "none";
-
   } else {
     document.getElementById("google-btn").style.display = "none";
     document.getElementById("user-info").style.display = "flex";
@@ -1205,8 +1204,6 @@ function showToast(msg, type = "info") {
 document.getElementById("login-pass").addEventListener("keydown", e => {
   if (e.key === "Enter") attemptLogin();
 });
-
-
 
 /* =============================================================
    GLOBAL FONKSİYONLAR
