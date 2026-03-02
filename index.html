@@ -15,6 +15,33 @@
 <!-- Toast bildirimleri buraya eklenir -->
 <div id="toast-container"></div>
 
+<!-- YENİ MESAJ BİLDİRİM BANNER -->
+<div id="notif-banner" style="
+  display:none;
+  position:fixed;
+  top:68px;left:0;right:0;
+  z-index:9998;
+  background:var(--blue-primary);
+  color:white;
+  padding:12px 5vw;
+  display:none;
+  align-items:center;
+  justify-content:space-between;
+  gap:1rem;
+  font-size:0.9rem;
+  font-weight:600;
+  box-shadow:0 4px 20px rgba(26,108,255,0.3);">
+  <span><i class="fas fa-bell"></i> <span id="notif-banner-text">Yeni mesajınız var!</span></span>
+  <div style="display:flex;gap:0.75rem;align-items:center;">
+    <button onclick="openModal('inbox-modal');hideNotifBanner()" 
+      style="background:white;color:var(--blue-primary);border:none;border-radius:100px;padding:6px 16px;font-size:0.85rem;font-weight:700;cursor:pointer">
+      Görüntüle
+    </button>
+    <button onclick="hideNotifBanner()" 
+      style="background:none;border:none;color:white;font-size:1.1rem;cursor:pointer">✕</button>
+  </div>
+</div>
+
 <!-- reCAPTCHA Ana Sayfa Overlay -->
 <div id="recaptcha-overlay" style="
   position:fixed;inset:0;z-index:99999;
@@ -51,9 +78,9 @@
 
     <div id="user-area" style="display:flex;align-items:center;gap:0.75rem;">
   
-<div id="notif-btn" style="display:none;position:relative;cursor:pointer" onclick="openModal('inbox-modal')">
+<div id="notif-btn" style="display:none;position:relative;cursor:pointer;padding:4px" onclick="openModal('inbox-modal')">
   <i class="fas fa-bell" style="font-size:1.2rem;color:var(--text-muted)"></i>
-  <span id="notif-badge" style="display:none;position:absolute;top:-6px;right:-6px;background:#ef4444;color:white;border-radius:50%;width:18px;height:18px;font-size:0.65rem;display:none;align-items:center;justify-content:center;font-weight:700"></span>
+  <span id="notif-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#ef4444;color:white;border-radius:50%;min-width:18px;height:18px;font-size:0.65rem;align-items:center;justify-content:center;font-weight:700;padding:0 3px"></span>
 </div>
 
       <button id="google-btn" class="btn btn-outline btn-sm" onclick="googleLogin()">
@@ -214,8 +241,23 @@
 <div class="modal-overlay" id="inbox-modal">
   <div class="modal modal-lg">
     <button class="modal-close" onclick="closeModal('inbox-modal')">✕</button>
-    <h2><i class="fas fa-inbox" style="color:var(--blue-primary)"></i> Gelen Kutusu</h2>
-    <div id="inbox-list"></div>
+    <h2><i class="fas fa-comments" style="color:var(--blue-primary)"></i> Mesajlarım</h2>
+    <div id="inbox-list" style="max-height:65vh;overflow-y:auto;"></div>
+    <!-- Yeni mesaj gönderme alanı -->
+    <div id="inbox-compose" style="display:none;margin-top:1rem;border-top:1px solid var(--border);padding-top:1rem;">
+      <div class="form-group">
+        <input class="form-control" type="text" id="inbox-subject" placeholder="Konu..."/>
+      </div>
+      <div style="display:flex;gap:0.5rem;">
+        <textarea class="form-control" id="inbox-message" placeholder="Mesajını yaz..." style="min-height:80px;resize:none;"></textarea>
+        <button class="btn btn-primary" onclick="sendMessageFromInbox()" style="align-self:flex-end">
+          <i class="fas fa-paper-plane"></i>
+        </button>
+      </div>
+    </div>
+    <div id="inbox-blocked-msg" style="display:none;text-align:center;padding:1rem;color:#ef4444;font-size:0.88rem;">
+      <i class="fas fa-ban"></i> Mesaj gönderme yetkiniz yok.
+    </div>
   </div>
 </div>
 

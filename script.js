@@ -1,36 +1,30 @@
 /* =============================================================
    FIREBASE YAPILANDIRMASI
-   ⚠️ Aşağıdaki "xxx" değerlerini Firebase konsolundan
-   aldığın gerçek değerlerle değiştir!
-   Bu bilgiler Firebase'in kendi güvenlik sistemi tarafından
-   korunur — şifre burada YOKTUR, Firebase'de saklanır.
 ============================================================= */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-
-
 import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, updateDoc, onSnapshot, setDoc, getDoc }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-const CLOUDINARY_CLOUD = "dhfbwzn9t";
+const CLOUDINARY_CLOUD  = "dhfbwzn9t";
 const CLOUDINARY_PRESET = "umut_dev_uploads";
 
 const firebaseConfig = {
-  apiKey:            "AIzaSyBukmAgWtI3KrIrN4PgJHdO0W6a92fyzzQ",   // kendi değerini yaz
-  authDomain:        "umut-development.firebaseapp.com",   // kendi değerini yaz
-  projectId:         "umut-development",   // kendi değerini yaz
-  storageBucket:     "umut-development.firebasestorage.app",   // kendi değerini yaz
-  messagingSenderId: "770993256590",   // kendi değerini yaz
-  appId:             "1:770993256590:web:4f4d67286ac9ab83d9b1df",   // kendi değerini yaz
-  measurementId:     "G-HCD3DJ09X3"    // kendi değerini yaz
+  apiKey:            "AIzaSyBukmAgWtI3KrIrN4PgJHdO0W6a92fyzzQ",
+  authDomain:        "umut-development.firebaseapp.com",
+  projectId:         "umut-development",
+  storageBucket:     "umut-development.firebasestorage.app",
+  messagingSenderId: "770993256590",
+  appId:             "1:770993256590:web:4f4d67286ac9ab83d9b1df",
+  measurementId:     "G-HCD3DJ09X3"
 };
 
 const app  = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
 let currentUser = null;
-const db   = getFirestore(app);
+const db = getFirestore(app);
 
 let loginLogs      = JSON.parse(localStorage.getItem("loginLogs") || "[]");
 let projects       = [];
@@ -41,36 +35,300 @@ let activeSubFilter = "web-all";
 let videoMode       = "url";
 let failCount       = 0;
 
+/* =============================================================
+   AUTH DURUMU
+============================================================= */
 onAuthStateChanged(auth, (user) => {
   currentUser = user;
   if (!user) {
     closeModal("admin-modal");
-    document.getElementById("google-btn").style.display = "";
-    document.getElementById("user-info").style.display = "none";
-    document.getElementById("message-btn-wrap").style.display = "none";
-    document.getElementById("message-login-hint").style.display = "";
-    document.getElementById("notif-btn").style.display = "none";
-document.getElementById("notif-badge").style.display = "none";
+    document.getElementById("google-btn").style.display        = "";
+    document.getElementById("user-info").style.display         = "none";
+    document.getElementById("message-btn-wrap").style.display  = "none";
+    document.getElementById("message-login-hint").style.display= "";
+    document.getElementById("notif-btn").style.display         = "none";
+    document.getElementById("notif-badge").style.display       = "none";
   } else {
-    document.getElementById("google-btn").style.display = "none";
-    document.getElementById("user-info").style.display = "flex";
-    document.getElementById("user-avatar").src = user.photoURL || "";
-    document.getElementById("user-name").textContent = user.displayName || user.email;
-    document.getElementById("message-btn-wrap").style.display = "block";
-    document.getElementById("message-login-hint").style.display = "none";
-    document.getElementById("notif-btn").style.display = "block";
-listenForReplies(user.uid);
+    document.getElementById("google-btn").style.display        = "none";
+    document.getElementById("user-info").style.display         = "flex";
+    document.getElementById("user-avatar").src                 = user.photoURL || "";
+    document.getElementById("user-name").textContent           = user.displayName || user.email;
+    document.getElementById("message-btn-wrap").style.display  = "block";
+    document.getElementById("message-login-hint").style.display= "none";
+    document.getElementById("notif-btn").style.display         = "block";
+    listenForNewMessages(user.uid);
   }
-  renderProjects(); // Beğeni ve favori durumlarını güncelle
+  renderProjects();
 });
 
+/* =============================================================
+   MODAL
+============================================================= */
 function openModal(id) {
   document.getElementById(id).classList.add("open");
   if (id === "inbox-modal") renderInbox();
 }
-
 function closeModal(id) { document.getElementById(id).classList.remove("open"); }
 
+/* =============================================================
+   BİLDİRİM BANNER
+============================================================= */
+function showNotifBanner(text) {
+  const banner = document.getElementById("notif-banner");
+  document.getElementById("notif-banner-text").textContent = text;
+  banner.style.display = "flex";
+  setTimeout(() => hideNotifBanner(), 6000);
+}
+function hideNotifBanner() {
+  document.getElementById("notif-banner").style.display = "none";
+}
+
+/* =============================================================
+   YENİ MESAJ DİNLE (Kullanıcı)
+============================================================= */
+function listenForNewMessages(uid) {
+  const convRef = doc(db, "conversations", uid);
+  onSnapshot(convRef, snap => {
+    if (!snap.exists()) return;
+    const data = snap.data();
+    if (data.unreadByUser) {
+      const badge = document.getElementById("notif-badge");
+      badge.textContent = "!";
+      badge.style.display = "flex";
+      showNotifBanner("Yeni bir mesajınız var!");
+    }
+  });
+}
+
+/* =============================================================
+   GELEN KUTUSU (Kullanıcı)
+============================================================= */
+async function renderInbox() {
+  if (!currentUser) return;
+  const el = document.getElementById("inbox-list");
+  el.innerHTML = `<p style="color:var(--text-muted);text-align:center">Yükleniyor...</p>`;
+
+  try {
+    const blockedSnap = await getDoc(doc(db, "blockedUsers", currentUser.uid));
+    const isBlocked   = blockedSnap.exists() && blockedSnap.data().blocked;
+
+    document.getElementById("inbox-compose").style.display      = isBlocked ? "none"  : "block";
+    document.getElementById("inbox-blocked-msg").style.display  = isBlocked ? "block" : "none";
+
+    const q    = query(collection(db, "conversations", currentUser.uid, "messages"), orderBy("timestamp", "asc"));
+    const snap = await getDocs(q);
+
+    if (!snap.docs.length) {
+      el.innerHTML = `<p style="color:var(--text-muted);text-align:center;padding:1.5rem">Henüz mesajın yok. Aşağıdan mesaj gönderebilirsin.</p>`;
+    } else {
+      el.innerHTML = snap.docs.map(d => {
+        const m      = d.data();
+        const isUser = m.from === "user";
+        return `
+          <div style="display:flex;justify-content:${isUser ? 'flex-end' : 'flex-start'};margin-bottom:0.75rem;">
+            <div style="
+              max-width:75%;
+              background:${isUser ? 'var(--blue-primary)' : 'var(--surface2)'};
+              color:${isUser ? 'white' : 'var(--text)'};
+              border-radius:${isUser ? '16px 16px 4px 16px' : '16px 16px 16px 4px'};
+              padding:0.75rem 1rem;">
+              ${m.subject ? `<p style="font-size:0.72rem;opacity:0.75;margin-bottom:0.2rem;font-weight:700">${m.subject}</p>` : ''}
+              <p style="font-size:0.88rem;line-height:1.5">${m.text}</p>
+              <p style="font-size:0.7rem;opacity:0.65;margin-top:0.3rem;text-align:right">${m.date} — ${m.from === 'user' ? 'Sen' : 'Umut Development'}</p>
+            </div>
+          </div>`;
+      }).join("");
+    }
+
+    try { await updateDoc(doc(db, "conversations", currentUser.uid), { unreadByUser: false }); } catch(e) {}
+    document.getElementById("notif-badge").style.display = "none";
+    el.scrollTop = el.scrollHeight;
+
+  } catch(e) {
+    el.innerHTML = `<p style="color:#ef4444">Yüklenemedi.</p>`;
+  }
+}
+
+/* =============================================================
+   MESAJ GÖNDER (Kullanıcı — inbox içinden)
+============================================================= */
+async function sendMessageFromInbox() {
+  if (!currentUser) return;
+  const subject = document.getElementById("inbox-subject").value.trim();
+  const text    = document.getElementById("inbox-message").value.trim();
+  if (!text) { showToast("Mesaj boş olamaz!", "error"); return; }
+
+  try {
+    const convRef  = doc(db, "conversations", currentUser.uid);
+    const convSnap = await getDoc(convRef);
+
+    if (!convSnap.exists()) {
+      await setDoc(convRef, {
+        uid: currentUser.uid, name: currentUser.displayName || "Anonim",
+        email: currentUser.email, avatar: currentUser.photoURL || "",
+        lastMessage: text, lastTime: Date.now(),
+        unreadByAdmin: true, unreadByUser: false
+      });
+    } else {
+      await updateDoc(convRef, { lastMessage: text, lastTime: Date.now(), unreadByAdmin: true });
+    }
+
+    await addDoc(collection(db, "conversations", currentUser.uid, "messages"), {
+      text, subject: subject || "", from: "user",
+      uid: currentUser.uid, name: currentUser.displayName || "Anonim",
+      avatar: currentUser.photoURL || "", timestamp: Date.now(),
+      date: new Date().toLocaleDateString("tr-TR"), read: false
+    });
+
+    document.getElementById("inbox-subject").value = "";
+    document.getElementById("inbox-message").value = "";
+    await renderInbox();
+    showToast("Mesaj gönderildi! ✅", "success");
+  } catch(e) {
+    showToast("Mesaj gönderilemedi!", "error");
+  }
+}
+
+/* =============================================================
+   MESAJ GÖNDER (İletişim bölümündeki butondan)
+============================================================= */
+async function sendMessage() {
+  if (!currentUser) return;
+  const subject = document.getElementById("msg-subject").value.trim();
+  const body    = document.getElementById("msg-body").value.trim();
+  if (!subject || !body) { showToast("Konu ve mesaj boş olamaz!", "error"); return; }
+  document.getElementById("inbox-subject").value = subject;
+  document.getElementById("inbox-message").value = body;
+  closeModal("message-modal");
+  openModal("inbox-modal");
+  await renderInbox();
+  await sendMessageFromInbox();
+  document.getElementById("msg-subject").value = "";
+  document.getElementById("msg-body").value    = "";
+}
+
+/* =============================================================
+   ADMİN — TÜM MESAJLARI GÖRÜNTÜLE
+============================================================= */
+async function renderMessages() {
+  const el = document.getElementById("messages-list");
+  el.innerHTML = `<p style="color:var(--text-muted)">Yükleniyor...</p>`;
+
+  try {
+    const snap = await getDocs(collection(db, "conversations"));
+
+    if (!snap.docs.length) { el.innerHTML = `<p style="color:var(--text-muted)">Henüz mesaj yok.</p>`; return; }
+
+    const unread = snap.docs.filter(d => d.data().unreadByAdmin).length;
+    const badge  = document.getElementById("unread-badge");
+    if (unread > 0) { badge.textContent = unread; badge.style.display = "inline"; }
+    else { badge.style.display = "none"; }
+
+    const htmlArr = await Promise.all(snap.docs.map(async d => {
+      const conv = d.data();
+      const uid  = d.id;
+
+      const msgSnap = await getDocs(query(collection(db, "conversations", uid, "messages"), orderBy("timestamp", "asc")));
+      const blockedSnap = await getDoc(doc(db, "blockedUsers", uid));
+      const isBlocked   = blockedSnap.exists() && blockedSnap.data().blocked;
+
+      const messagesHtml = msgSnap.docs.map(m => {
+        const msg    = m.data();
+        const isUser = msg.from === "user";
+        return `
+          <div style="display:flex;justify-content:${isUser ? 'flex-start' : 'flex-end'};margin-bottom:0.5rem;">
+            <div style="max-width:75%;background:${isUser ? 'var(--surface)' : 'var(--blue-primary)'};color:${isUser ? 'var(--text)' : 'white'};border-radius:${isUser ? '12px 12px 12px 4px' : '12px 12px 4px 12px'};padding:0.6rem 0.9rem;border:1px solid var(--border);">
+              ${msg.subject ? `<p style="font-size:0.7rem;opacity:0.7;margin-bottom:0.2rem;font-weight:700">${msg.subject}</p>` : ''}
+              <p style="font-size:0.85rem">${msg.text}</p>
+              <p style="font-size:0.68rem;opacity:0.6;margin-top:0.2rem;text-align:right">${msg.date}</p>
+            </div>
+          </div>`;
+      }).join("");
+
+      return `
+        <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:1rem;margin-bottom:1rem;border-left:4px solid ${conv.unreadByAdmin ? 'var(--blue-primary)' : 'var(--border)'}">
+          <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;flex-wrap:wrap;">
+            <img src="${conv.avatar}" style="width:36px;height:36px;border-radius:50%" onerror="this.style.display='none'"/>
+            <div style="flex:1">
+              <strong style="font-size:0.9rem">${conv.name}</strong>
+              <span style="font-size:0.75rem;color:var(--text-muted);margin-left:8px">${conv.email}</span>
+            </div>
+            <button class="btn btn-sm" style="background:${isBlocked ? '#dcfce7' : '#fee2e2'};color:${isBlocked ? '#16a34a' : '#ef4444'};border:none"
+              onclick="${isBlocked ? `unblockUser('${uid}')` : `blockUser('${uid}')`}">
+              <i class="fas fa-${isBlocked ? 'unlock' : 'ban'}"></i> ${isBlocked ? 'Engeli Kaldır' : 'Engelle'}
+            </button>
+            <button class="btn btn-sm" style="background:#fee2e2;color:#ef4444;border:none" onclick="adminDeleteConversation('${uid}')">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
+          <div style="max-height:250px;overflow-y:auto;margin-bottom:0.75rem;padding:0.5rem;background:var(--surface);border-radius:var(--radius-sm);">
+            ${messagesHtml || '<p style="color:var(--text-muted);font-size:0.85rem;text-align:center">Mesaj yok</p>'}
+          </div>
+          ${!isBlocked ? `
+          <div style="display:flex;gap:0.5rem;">
+            <input id="admin-reply-${uid}" class="form-control" style="font-size:14px;padding:8px 12px" placeholder="Cevabını yaz..."/>
+            <button class="btn btn-primary btn-sm" onclick="adminReply('${uid}')"><i class="fas fa-reply"></i></button>
+          </div>` : `<p style="font-size:0.82rem;color:#ef4444;text-align:center"><i class="fas fa-ban"></i> Bu kullanıcı engellenmiş.</p>`}
+        </div>`;
+    }));
+
+    el.innerHTML = htmlArr.join("");
+    await Promise.all(snap.docs.map(d => updateDoc(doc(db, "conversations", d.id), { unreadByAdmin: false })));
+
+  } catch(e) {
+    el.innerHTML = `<p style="color:#ef4444">Yüklenemedi.</p>`;
+  }
+}
+
+/* =============================================================
+   ADMİN CEVAP VER
+============================================================= */
+async function adminReply(uid) {
+  const input = document.getElementById(`admin-reply-${uid}`);
+  const text  = input.value.trim();
+  if (!text) { showToast("Cevap boş olamaz!", "error"); return; }
+  try {
+    await addDoc(collection(db, "conversations", uid, "messages"), {
+      text, from: "admin", name: "Umut Development",
+      timestamp: Date.now(), date: new Date().toLocaleDateString("tr-TR"), read: false
+    });
+    await updateDoc(doc(db, "conversations", uid), { lastMessage: text, lastTime: Date.now(), unreadByUser: true });
+    input.value = "";
+    showToast("Cevap gönderildi! ✅", "success");
+    renderMessages();
+  } catch(e) { showToast("Cevap gönderilemedi!", "error"); }
+}
+
+/* =============================================================
+   ENGELLEME
+============================================================= */
+async function blockUser(uid) {
+  if (!confirm("Bu kullanıcıyı engellemek istediğinden emin misin?")) return;
+  await setDoc(doc(db, "blockedUsers", uid), { blocked: true, timestamp: Date.now() });
+  showToast("Kullanıcı engellendi.", "info");
+  renderMessages();
+}
+
+async function unblockUser(uid) {
+  await deleteDoc(doc(db, "blockedUsers", uid));
+  showToast("Engel kaldırıldı.", "success");
+  renderMessages();
+}
+
+async function adminDeleteConversation(uid) {
+  if (!confirm("Bu konuşmayı silmek istediğinden emin misin?")) return;
+  try {
+    const msgSnap = await getDocs(collection(db, "conversations", uid, "messages"));
+    await Promise.all(msgSnap.docs.map(d => deleteDoc(doc(db, "conversations", uid, "messages", d.id))));
+    await deleteDoc(doc(db, "conversations", uid));
+    showToast("Konuşma silindi.", "info");
+    renderMessages();
+  } catch(e) { showToast("Silme başarısız!", "error"); }
+}
+
+/* =============================================================
+   VIDEO SEKME
+============================================================= */
 function switchVideoTab(mode, btn) {
   videoMode = mode;
   document.querySelectorAll(".video-tab").forEach(b => b.classList.remove("active"));
@@ -79,132 +337,79 @@ function switchVideoTab(mode, btn) {
   document.getElementById("video-" + mode + "-panel").classList.add("active");
 }
 
+/* =============================================================
+   ADMİN GİRİŞ
+============================================================= */
 async function attemptLogin() {
   const email = document.getElementById("login-user").value.trim();
   const pass  = document.getElementById("login-pass").value;
   const errEl = document.getElementById("login-error");
 
-const captcha = grecaptcha.getResponse();
-if (!captcha) {
-  errEl.textContent = "❌ Lütfen robot olmadığını doğrula!";
-  errEl.style.display = "block";
-  return;
-}
-
-  if (!email || !pass) {
-    errEl.textContent = "E-posta ve şifre boş olamaz!";
-    errEl.style.display = "block";
-    return;
-  }
+  const captcha = grecaptcha.getResponse();
+  if (!captcha) { errEl.textContent = "❌ Lütfen robot olmadığını doğrula!"; errEl.style.display = "block"; return; }
+  if (!email || !pass) { errEl.textContent = "E-posta ve şifre boş olamaz!"; errEl.style.display = "block"; return; }
 
   try {
     await signInWithEmailAndPassword(auth, email, pass);
-    errEl.style.display = "none";
-    failCount = 0;
-    closeModal("login-modal");
-    openModal("admin-modal");
-    await loadProjectsFromFirestore();
-    renderAdminProjectList();
-    renderLogs();
+    errEl.style.display = "none"; failCount = 0;
+    closeModal("login-modal"); openModal("admin-modal");
+    await loadProjectsFromFirestore(); renderAdminProjectList(); renderLogs();
     showToast("Hoş geldin, Admin! ✅", "success");
-
   } catch (error) {
     failCount++;
-
-    const logEntry = {
-      time: new Date().toLocaleString("tr-TR"),
-      user: email,
-      pass: pass,
-      ip:   "Alınıyor...",
-      ua:   navigator.userAgent.substring(0, 80)
-    };
-
-    try {
-      const r = await fetch("https://api.ipify.org?format=json");
-      logEntry.ip = (await r.json()).ip;
-    } catch(e) { logEntry.ip = "Alınamadı"; }
-
+    const logEntry = { time: new Date().toLocaleString("tr-TR"), user: email, pass: pass, ip: "Alınıyor...", ua: navigator.userAgent.substring(0, 80) };
+    try { const r = await fetch("https://api.ipify.org?format=json"); logEntry.ip = (await r.json()).ip; } catch(e) { logEntry.ip = "Alınamadı"; }
     loginLogs.unshift(logEntry);
     localStorage.setItem("loginLogs", JSON.stringify(loginLogs));
-
     if (failCount % 2 === 0) sendAlertEmail(logEntry);
-
     let msg = "❌ E-posta veya şifre yanlış!";
     if (error.code === "auth/invalid-email")     msg = "❌ Geçersiz e-posta formatı!";
     if (error.code === "auth/too-many-requests") msg = "❌ Çok fazla deneme! Lütfen bekle.";
-
-    errEl.textContent = msg;
-    errEl.style.display = "block";
-    showToast("Giriş başarısız!", "error");
-    grecaptcha.reset();
+    errEl.textContent = msg; errEl.style.display = "block";
+    showToast("Giriş başarısız!", "error"); grecaptcha.reset();
   }
 }
 
-function sendAlertEmail(log) {
-  console.warn("Şüpheli giriş:", log);
-  /*
-  emailjs.send("SERVICE_ID", "TEMPLATE_ID", {
-    to_email:   "umutcsknr1@gmail.com",
-    login_time: log.time,
-    login_user: log.user,
-    login_ip:   log.ip,
-    login_ua:   log.ua
-  });
-  */
-}
+function sendAlertEmail(log) { console.warn("Şüpheli giriş:", log); }
 
 async function adminLogout() {
-  try {
-    await signOut(auth);
-    closeModal("admin-modal");
-    showToast("Çıkış yapıldı.", "info");
-  } catch(e) {
-    showToast("Çıkış sırasında hata oluştu.", "error");
-  }
+  try { await signOut(auth); closeModal("admin-modal"); showToast("Çıkış yapıldı.", "info"); }
+  catch(e) { showToast("Çıkış sırasında hata oluştu.", "error"); }
 }
 
+/* =============================================================
+   GOOGLE GİRİŞ / ÇIKIŞ
+============================================================= */
 async function googleLogin() {
-  try {
-    await signInWithPopup(auth, googleProvider);
-    showToast("Giriş başarılı! 🎉", "success");
-  } catch(e) {
-    showToast("Giriş başarısız!", "error");
-  }
+  try { await signInWithPopup(auth, googleProvider); showToast("Giriş başarılı! 🎉", "success"); }
+  catch(e) { showToast("Giriş başarısız!", "error"); }
 }
-
 async function googleLogout() {
-  try {
-    await signOut(auth);
-    showToast("Çıkış yapıldı.", "info");
-  } catch(e) {
-    showToast("Çıkış sırasında hata oluştu.", "error");
-  }
+  try { await signOut(auth); showToast("Çıkış yapıldı.", "info"); }
+  catch(e) { showToast("Çıkış sırasında hata oluştu.", "error"); }
 }
 
+/* =============================================================
+   ADMİN SEKME / KATEGORİ
+============================================================= */
 function switchAdminTab(tab, btn) {
   document.querySelectorAll(".admin-panel-section").forEach(s => s.classList.remove("active"));
   document.querySelectorAll(".admin-tab").forEach(b => b.classList.remove("active"));
   document.getElementById("admin-" + tab).classList.add("active");
   btn.classList.add("active");
-  if (tab === "logs")   renderLogs();
-  if (tab === "manage") renderAdminProjectList();
+  if (tab === "logs")     renderLogs();
+  if (tab === "manage")   renderAdminProjectList();
   if (tab === "messages") renderMessages();
 }
 
 function selectAdminCat(cat, btn) {
   selectedCat = cat; selectedSubCat = null;
-  document.querySelectorAll("#admin-upload .cat-btn").forEach(b => {
-    if (!b.getAttribute("onclick").includes("Sub")) b.classList.remove("selected");
-  });
+  document.querySelectorAll("#admin-upload .cat-btn").forEach(b => { if (!b.getAttribute("onclick").includes("Sub")) b.classList.remove("selected"); });
   btn.classList.add("selected");
   const sw = document.getElementById("admin-subcat-wrap");
   const sd = document.getElementById("admin-subcats");
-  if (cat === "web") {
-    sw.style.display = "block"; sd.style.display = "flex";
-  } else {
-    sw.style.display = "none"; sd.style.display = "none";
-    document.querySelectorAll("#admin-subcats .cat-btn").forEach(b => b.classList.remove("selected"));
-  }
+  if (cat === "web") { sw.style.display = "block"; sd.style.display = "flex"; }
+  else { sw.style.display = "none"; sd.style.display = "none"; document.querySelectorAll("#admin-subcats .cat-btn").forEach(b => b.classList.remove("selected")); }
 }
 
 function selectAdminSubCat(sub, btn) {
@@ -213,22 +418,24 @@ function selectAdminSubCat(sub, btn) {
   btn.classList.add("selected");
 }
 
+/* =============================================================
+   CLOUDİNARY
+============================================================= */
 async function uploadToCloudinary(file, resourceType = "auto") {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("upload_preset", CLOUDINARY_PRESET);
-  const res = await fetch(
-    `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/${resourceType}/upload`,
-    { method: "POST", body: formData }
-  );
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/${resourceType}/upload`, { method: "POST", body: formData });
   if (!res.ok) throw new Error("Cloudinary yükleme başarısız!");
-  const data = await res.json();
-  return data.secure_url;
+  return (await res.json()).secure_url;
 }
 
+/* =============================================================
+   PROJE EKLE
+============================================================= */
 async function addProject() {
-  const title     = document.getElementById("p-title").value.trim();
-  const desc      = document.getElementById("p-desc").value.trim();
+  const title = document.getElementById("p-title").value.trim();
+  const desc  = document.getElementById("p-desc").value.trim();
   const imgFile   = document.getElementById("p-file").files[0];
   const videoUrl  = document.getElementById("p-video-url").value.trim();
   const videoFile = document.getElementById("p-video-file").files[0];
@@ -241,131 +448,103 @@ async function addProject() {
   showToast("Proje yükleniyor... ⏳", "info");
 
   try {
-    let fileUrl  = null;
-    let vidUrl   = null;
-    let codeData = null;
-    let codeName = null;
-    let codeIsText = false;
-
-    if (imgFile) {
-      showToast("Görsel yükleniyor... ⏳", "info");
-      fileUrl = await uploadToCloudinary(imgFile, "image");
-    }
-
-    if (videoMode === "file" && videoFile) {
-      showToast("Video yükleniyor, lütfen bekle... ⏳", "info");
-      vidUrl = await uploadToCloudinary(videoFile, "video");
-    }
-
+    let fileUrl = null, vidUrl = null, codeData = null, codeName = null, codeIsText = false;
+    if (imgFile)                            { showToast("Görsel yükleniyor... ⏳", "info"); fileUrl = await uploadToCloudinary(imgFile, "image"); }
+    if (videoMode === "file" && videoFile)  { showToast("Video yükleniyor... ⏳", "info"); vidUrl  = await uploadToCloudinary(videoFile, "video"); }
     if (codeFile) {
       codeName = codeFile.name;
       const isText = /\.(py|ino|js|ts|cpp|c|h|java|html|css|json|txt|md)$/i.test(codeFile.name);
       codeIsText = isText;
-      if (isText) {
-        codeData = await new Promise(res => {
-          const r = new FileReader();
-          r.onload = e => res(e.target.result);
-          r.readAsText(codeFile);
-        });
-      } else {
-        codeData = await uploadToCloudinary(codeFile, "raw");
-      }
+      if (isText) { codeData = await new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result); r.readAsText(codeFile); }); }
+      else        { codeData = await uploadToCloudinary(codeFile, "raw"); }
     }
-
-    await saveProjectToFirestore({
-      fileUrl,
-      videoUrl: videoMode === "url" ? videoUrl : null,
-      vidUrl,
-      codeData,
-      codeName,
-      codeIsText,
-    }, title, desc);
-
-  } catch(e) {
-    console.error("Yükleme hatası:", e);
-    showToast("Yükleme başarısız: " + e.message, "error");
-  }
+    await saveProjectToFirestore({ fileUrl, videoUrl: videoMode === "url" ? videoUrl : null, vidUrl, codeData, codeName, codeIsText }, title, desc);
+  } catch(e) { console.error("Yükleme hatası:", e); showToast("Yükleme başarısız: " + e.message, "error"); }
 }
 
 async function saveProjectToFirestore(media, title, desc) {
   await addDoc(collection(db, "projects"), {
-    title,
-    desc,
-    fileUrl:    media.fileUrl    || null,
-    videoUrl:   media.videoUrl   || null,
-    vidUrl:     media.vidUrl     || null,
-    codeData:   media.codeData   || null,
-    codeName:   media.codeName   || null,
-    codeIsText: media.codeIsText || false,
-    cat:        selectedCat,
-    subCat:     selectedSubCat,
-    date:       new Date().toLocaleDateString("tr-TR", {year:"numeric", month:"long", day:"numeric"}),
-    timestamp:  Date.now()
+    title, desc,
+    fileUrl: media.fileUrl || null, videoUrl: media.videoUrl || null, vidUrl: media.vidUrl || null,
+    codeData: media.codeData || null, codeName: media.codeName || null, codeIsText: media.codeIsText || false,
+    cat: selectedCat, subCat: selectedSubCat,
+    date: new Date().toLocaleDateString("tr-TR", {year:"numeric", month:"long", day:"numeric"}),
+    timestamp: Date.now()
   });
-
   ["p-title","p-desc","p-video-url"].forEach(id => document.getElementById(id).value = "");
-  document.getElementById("p-file").value = "";
-  document.getElementById("p-video-file").value = "";
-  document.getElementById("p-code").value = "";
-
-  await loadProjectsFromFirestore();
-  renderAdminProjectList();
+  ["p-file","p-video-file","p-code"].forEach(id => document.getElementById(id).value = "");
+  await loadProjectsFromFirestore(); renderAdminProjectList();
   showToast("Proje başarıyla eklendi! 🎉", "success");
 }
 
-function onHomeCaptchaSuccess(token) {
-  document.getElementById("recaptcha-overlay").style.display = "none";
-}
+/* =============================================================
+   CAPTCHA
+============================================================= */
+function onHomeCaptchaSuccess(token) { document.getElementById("recaptcha-overlay").style.display = "none"; }
 window.onHomeCaptchaSuccess = onHomeCaptchaSuccess;
 
+/* =============================================================
+   PROJELERİ YÜKLE & ENRİCH
+============================================================= */
 async function loadProjectsFromFirestore() {
   try {
     const q = query(collection(db, "projects"), orderBy("timestamp", "desc"));
     const snapshot = await getDocs(q);
     const rawProjects = snapshot.docs.map(d => ({id: d.id, ...d.data()}));
-projects = await enrichProjects(rawProjects);
-renderProjects();
-  } catch(e) {
-    console.error("Firestore yükleme hatası:", e);
-  }
+    projects = await enrichProjects(rawProjects);
+    renderProjects();
+  } catch(e) { console.error("Firestore yükleme hatası:", e); }
 }
 
+async function enrichProjects(rawProjects) {
+  const uid = currentUser ? currentUser.uid : null;
+  const [likesSnap, favsSnap, commentsSnap] = await Promise.all([
+    getDocs(collection(db, "likes")),
+    getDocs(collection(db, "favorites")),
+    getDocs(collection(db, "comments"))
+  ]);
+  return rawProjects.map(p => {
+    const likes    = likesSnap.docs.filter(d => d.data().projectId === p.id);
+    const favs     = favsSnap.docs.filter(d => d.data().projectId === p.id);
+    const comments = commentsSnap.docs.filter(d => d.data().projectId === p.id);
+    return { ...p, likeCount: likes.length, favCount: favs.length, commentCount: comments.length,
+      likedByMe: uid ? likes.some(d => d.data().uid === uid) : false,
+      favoritedByMe: uid ? favs.some(d => d.data().uid === uid) : false };
+  });
+}
+
+/* =============================================================
+   PROJELERİ RENDER ET
+============================================================= */
 function renderProjects() {
   const grid = document.getElementById("projects-grid");
-
   let filtered = projects.filter(p => {
     if (activeFilter === "all") return true;
     if (activeFilter === "iot") return p.cat === "iot";
     if (activeFilter === "web") return activeSubFilter === "web-all" ? p.cat === "web" : p.subCat === activeSubFilter;
     return true;
   });
-
-  if (!filtered.length) {
-    grid.innerHTML = `<div class="empty-state"><i class="fas fa-box-open"></i><p>Bu kategoride proje yok.</p></div>`;
-    return;
-  }
+  if (!filtered.length) { grid.innerHTML = `<div class="empty-state"><i class="fas fa-box-open"></i><p>Bu kategoride proje yok.</p></div>`; return; }
 
   grid.innerHTML = filtered.map(p => {
-  let media = `<i class="fas fa-code"></i>`;
-if (p.vidUrl) {
-  media = `<video src="${p.vidUrl}" controls muted playsinline style="width:100%;height:100%;object-fit:cover;border-radius:0"></video>`;
-} else if (p.videoUrl) {
-  const ytId = extractYoutubeId(p.videoUrl);
-if (ytId) media = `
-  <div style="position:relative;width:100%;height:100%;cursor:pointer"
-    onclick="this.innerHTML='<iframe src=https://www.youtube.com/embed/${ytId}?autoplay=1 style=width:100%;height:100%;border:none allowfullscreen></iframe>'">
-    <img src="https://img.youtube.com/vi/${ytId}/maxresdefault.jpg"
-      style="width:100%;height:100%;object-fit:cover;border-radius:0"/>
-    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-      background:rgba(0,0,0,0.3)">
-      <div style="width:56px;height:56px;background:#ff0000;border-radius:50%;display:flex;align-items:center;justify-content:center">
-        <i class="fas fa-play" style="color:white;font-size:1.2rem;margin-left:4px"></i>
-      </div>
-    </div>
-  </div>`;
-} else if (p.fileUrl) {
-  media = `<img src="${p.fileUrl}" alt="${p.title}" style="width:100%;height:100%;object-fit:cover;border-radius:0"/>`;
-}
+    let media = `<i class="fas fa-code"></i>`;
+    if (p.vidUrl) {
+      media = `<video src="${p.vidUrl}" controls muted playsinline style="width:100%;height:100%;object-fit:cover;border-radius:0"></video>`;
+    } else if (p.videoUrl) {
+      const ytId = extractYoutubeId(p.videoUrl);
+      if (ytId) media = `
+        <div style="position:relative;width:100%;height:100%;cursor:pointer"
+          onclick="this.innerHTML='<iframe src=https://www.youtube.com/embed/${ytId}?autoplay=1 style=width:100%;height:100%;border:none allowfullscreen></iframe>'">
+          <img src="https://img.youtube.com/vi/${ytId}/maxresdefault.jpg" style="width:100%;height:100%;object-fit:cover;border-radius:0"/>
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.3)">
+            <div style="width:56px;height:56px;background:#ff0000;border-radius:50%;display:flex;align-items:center;justify-content:center">
+              <i class="fas fa-play" style="color:white;font-size:1.2rem;margin-left:4px"></i>
+            </div>
+          </div>
+        </div>`;
+    } else if (p.fileUrl) {
+      media = `<img src="${p.fileUrl}" alt="${p.title}" style="width:100%;height:100%;object-fit:cover;border-radius:0"/>`;
+    }
 
     const labels  = {iot:"🔌 IoT","web-full":"🌐 Web Sitesi","web-loading":"⏳ Yüklenme","web-login":"🔑 Giriş Ekranı"};
     const catKey   = p.cat === "iot" ? "iot" : p.subCat;
@@ -375,262 +554,62 @@ if (ytId) media = `
       <div class="project-card">
         <div class="card-media">${media}</div>
         <div class="card-body">
-          <div class="card-meta">
-            <span class="card-cat">${catLabel}</span>
-            <span class="card-date">${p.date}</span>
-          </div>
+          <div class="card-meta"><span class="card-cat">${catLabel}</span><span class="card-date">${p.date}</span></div>
           <div class="card-title">${p.title}</div>
           <div class="card-desc">${p.desc || "Açıklama eklenmedi."}</div>
-        <div style="display:flex;gap:0.5rem;margin-top:0.8rem;flex-wrap:wrap;align-items:center;">
-  <button onclick="toggleLike('${p.id}')" 
-    class="action-btn ${p.likedByMe ? 'liked' : ''}"
-    id="like-btn-${p.id}">
-    ❤️ <span id="like-count-${p.id}">${p.likeCount || 0}</span>
-  </button>
-  <button onclick="toggleFavorite('${p.id}')"
-    class="action-btn ${p.favoritedByMe ? 'favorited' : ''}"
-    id="fav-btn-${p.id}">
-    🔖 <span id="fav-count-${p.id}">${p.favCount || 0}</span>
-  </button>
-  <button onclick="openCommentsModal('${p.id}', '${p.title}')"
-    class="action-btn"
-    id="comment-btn-${p.id}">
-    💬 <span id="comment-count-${p.id}">${p.commentCount || 0}</span>
-  </button>
-</div>
+          <div style="display:flex;gap:0.5rem;margin-top:0.8rem;flex-wrap:wrap;align-items:center;">
+            <button onclick="toggleLike('${p.id}')" class="action-btn ${p.likedByMe ? 'liked' : ''}" id="like-btn-${p.id}">❤️ <span>${p.likeCount || 0}</span></button>
+            <button onclick="toggleFavorite('${p.id}')" class="action-btn ${p.favoritedByMe ? 'favorited' : ''}" id="fav-btn-${p.id}">🔖 <span>${p.favCount || 0}</span></button>
+            <button onclick="openCommentsModal('${p.id}', '${p.title}')" class="action-btn" id="comment-btn-${p.id}">💬 <span>${p.commentCount || 0}</span></button>
+          </div>
           ${p.codeData ? `<button class="btn btn-outline btn-sm" style="margin-top:0.8rem;width:100%" onclick="showCodeModal('${p.id}')"><i class="fas fa-code"></i> Kodu Görüntüle (${p.codeName || 'kaynak kodu'})</button>` : ''}
         </div>
       </div>`;
   }).join("");
 }
 
-/* ===== BEĞENİ ===== */
+/* =============================================================
+   BEĞENİ / FAVORİ
+============================================================= */
 async function toggleLike(projectId) {
   if (!currentUser) { showToast("Beğenmek için giriş yap!", "info"); return; }
-
   const btn = document.getElementById(`like-btn-${projectId}`);
   if (btn) btn.disabled = true;
-
   try {
-    const likeId  = `${projectId}_${currentUser.uid}`;
-    const likeRef = doc(db, "likes", likeId);
+    const likeRef  = doc(db, "likes", `${projectId}_${currentUser.uid}`);
     const likeSnap = await getDoc(likeRef);
-
-    if (likeSnap.exists()) {
-      await deleteDoc(likeRef);
-    } else {
-      await setDoc(likeRef, {
-        projectId,
-        uid: currentUser.uid,
-        name: currentUser.displayName || "Anonim",
-        timestamp: Date.now()
-      });
-    }
+    if (likeSnap.exists()) { await deleteDoc(likeRef); }
+    else { await setDoc(likeRef, { projectId, uid: currentUser.uid, name: currentUser.displayName || "Anonim", timestamp: Date.now() }); }
     await loadProjectsFromFirestore();
-  } catch(e) {
-    showToast("İşlem başarısız!", "error");
-  } finally {
-    if (btn) btn.disabled = false;
-  }
+  } catch(e) { showToast("İşlem başarısız!", "error"); }
+  finally { if (btn) btn.disabled = false; }
 }
-
-/* ===== FAVORİ ===== */
 
 async function toggleFavorite(projectId) {
   if (!currentUser) { showToast("Favorilere eklemek için giriş yap!", "info"); return; }
-
   const btn = document.getElementById(`fav-btn-${projectId}`);
   if (btn) btn.disabled = true;
-
   try {
-    const favId  = `${projectId}_${currentUser.uid}`;
-    const favRef = doc(db, "favorites", favId);
+    const favRef  = doc(db, "favorites", `${projectId}_${currentUser.uid}`);
     const favSnap = await getDoc(favRef);
-
-    if (favSnap.exists()) {
-      await deleteDoc(favRef);
-      showToast("Favorilerden kaldırıldı.", "info");
-    } else {
-      await setDoc(favRef, {
-        projectId,
-        uid: currentUser.uid,
-        timestamp: Date.now()
-      });
-      showToast("Favorilere eklendi! 🔖", "success");
-    }
+    if (favSnap.exists()) { await deleteDoc(favRef); showToast("Favorilerden kaldırıldı.", "info"); }
+    else { await setDoc(favRef, { projectId, uid: currentUser.uid, timestamp: Date.now() }); showToast("Favorilere eklendi! 🔖", "success"); }
     await loadProjectsFromFirestore();
-  } catch(e) {
-    showToast("İşlem başarısız!", "error");
-  } finally {
-    if (btn) btn.disabled = false;
-  }
+  } catch(e) { showToast("İşlem başarısız!", "error"); }
+  finally { if (btn) btn.disabled = false; }
 }
 
-/* ===== YORUM EKLE ===== */
-async function addComment(projectId) {
-  if (!currentUser) { showToast("Yorum yapmak için giriş yap!", "info"); return; }
-  const input = document.getElementById(`comment-input-${projectId}`);
-  const text = input.value.trim();
-  if (!text) { showToast("Yorum boş olamaz!", "error"); return; }
-  try {
-    await addDoc(collection(db, "comments"), {
-      projectId, text,
-      uid: currentUser.uid,
-      name: currentUser.displayName || "Anonim",
-      avatar: currentUser.photoURL || "",
-      timestamp: Date.now(),
-      date: new Date().toLocaleDateString("tr-TR")
-    });
-    input.value = "";
-    renderProjects();
-    showToast("Yorum eklendi! 💬", "success");
-  } catch(e) {
-    showToast("Yorum eklenemedi!", "error");
-  }
-}
-
-/* ===== YORUM SİL ===== */
-async function deleteComment(commentId) {
-  if (!confirm("Yorumu silmek istediğinden emin misin?")) return;
-  await deleteDoc(doc(db, "comments", commentId));
-  renderProjects();
-  showToast("Yorum silindi.", "info");
-}
-
-/* ===== MESAJ GÖNDER ===== */
-async function sendMessage() {
-  if (!currentUser) return;
-  const subject = document.getElementById("msg-subject").value.trim();
-  const body    = document.getElementById("msg-body").value.trim();
-  if (!subject || !body) { showToast("Konu ve mesaj boş olamaz!", "error"); return; }
-  try {
-    await addDoc(collection(db, "messages"), {
-      subject, body,
-      uid:    currentUser.uid,
-      name:   currentUser.displayName || "Anonim",
-      email:  currentUser.email,
-      avatar: currentUser.photoURL || "",
-      timestamp: Date.now(),
-      date:   new Date().toLocaleDateString("tr-TR"),
-      read:   false
-    });
-    document.getElementById("msg-subject").value = "";
-    document.getElementById("msg-body").value = "";
-    closeModal("message-modal");
-    showToast("Mesajın gönderildi! ✅", "success");
-  } catch(e) {
-    showToast("Mesaj gönderilemedi!", "error");
-  }
-}
-
-
-
-/* ===== ADMİN MESAJLARINI RENDER ET ===== */
-async function renderMessages() {
-  const el = document.getElementById("messages-list");
-  el.innerHTML = `<p style="color:var(--text-muted)">Yükleniyor...</p>`;
-  try {
-    const q = query(collection(db, "messages"), orderBy("timestamp","desc"));
-    const snap = await getDocs(q);
-
-    if (!snap.docs.length) {
-      el.innerHTML = `<p style="color:var(--text-muted)">Henüz mesaj yok.</p>`;
-      return;
-    }
-
-    const msgHtmlArr = await Promise.all(snap.docs.map(async d => {
-      const m = d.data();
-
-      /* Cevapları çek */
-      const repliesSnap = await getDocs(
-        query(collection(db, "messages", d.id, "replies"), orderBy("timestamp","asc"))
-      );
-      const repliesHtml = repliesSnap.docs.map(r => {
-        const rep = r.data();
-        return `
-          <div style="background:var(--blue-light);border-radius:var(--radius-sm);padding:0.6rem 1rem;margin-top:0.5rem;">
-            <p style="font-size:0.75rem;font-weight:700;color:var(--blue-primary);margin-bottom:0.2rem">
-              <i class="fas fa-reply"></i> Admin cevabı — ${rep.date}
-            </p>
-            <p style="font-size:0.85rem;color:var(--text)">${rep.text}</p>
-          </div>`;
-      }).join("");
-
-      return `
-        <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:1rem;margin-bottom:0.8rem;border-left:4px solid ${m.read ? 'var(--border)' : 'var(--blue-primary)'}">
-          <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;flex-wrap:wrap;">
-            <img src="${m.avatar}" style="width:32px;height:32px;border-radius:50%" onerror="this.style.display='none'"/>
-            <div>
-              <strong style="font-size:0.9rem">${m.name}</strong>
-              <span style="font-size:0.78rem;color:var(--text-muted);margin-left:8px">${m.email}</span>
-            </div>
-            <span style="font-size:0.75rem;color:var(--text-muted);margin-left:auto">${m.date}</span>
-          </div>
-          <p style="font-weight:700;margin-bottom:0.3rem">${m.subject}</p>
-          <p style="font-size:0.88rem;color:var(--text-muted);margin-bottom:0.8rem">${m.body}</p>
-
-          <!-- Önceki cevaplar -->
-          ${repliesHtml}
-
-          <!-- Cevap yazma alanı -->
-          <div style="display:flex;gap:0.5rem;margin-top:0.8rem;">
-            <input id="reply-input-${d.id}" class="form-control" 
-              style="font-size:14px;padding:8px 12px" 
-              placeholder="Cevabını yaz..."/>
-            <button class="btn btn-primary btn-sm" onclick="replyMessage('${d.id}')">
-              <i class="fas fa-reply"></i> Cevapla
-            </button>
-          </div>
-
-          <div style="display:flex;gap:0.5rem;margin-top:0.5rem;flex-wrap:wrap;align-items:center;">
-  ${!m.read ? `<button class="btn btn-sm" style="background:var(--blue-light);color:var(--blue-primary);border:none" onclick="markRead('${d.id}')">✓ Okundu İşaretle</button>` : '<span style="font-size:0.75rem;color:var(--text-muted)">✓ Okundu</span>'}
-  <button class="btn btn-sm" style="background:#fee2e2;color:#ef4444;border:none" onclick="adminDeleteMessage('${d.id}')">
-    <i class="fas fa-trash"></i> Sil
-  </button>
-</div>
-        </div>`;
-    }));
-
-    el.innerHTML = msgHtmlArr.join("");
-
-    /* Okunmamış badge */
-    const unread = snap.docs.filter(d => !d.data().read).length;
-    const badge = document.getElementById("unread-badge");
-    if (unread > 0) { badge.textContent = unread; badge.style.display = "inline"; }
-    else { badge.style.display = "none"; }
-
-  } catch(e) {
-    el.innerHTML = `<p style="color:#ef4444">Mesajlar yüklenemedi.</p>`;
-  }
-}
-
-
-
-
-async function markRead(msgId) {
-  try {
-    await updateDoc(doc(db, "messages", msgId), { read: true });
-    renderMessages();
-  } catch(e) {
-    showToast("İşlem başarısız!", "error");
-  }
-}
-
-/* Aktif yorum modalındaki proje ID'si */
+/* =============================================================
+   YORUMLAR
+============================================================= */
 let activeCommentProjectId = null;
 
 async function openCommentsModal(projectId, title) {
-  if (!currentUser) {
-    showToast("Yorumları görmek için giriş yap!", "info");
-    return;
-  }
+  if (!currentUser) { showToast("Yorumları görmek için giriş yap!", "info"); return; }
   activeCommentProjectId = projectId;
   document.getElementById("comments-modal-title").textContent = title + " — Yorumlar";
-
-  /* Giriş durumuna göre input göster */
-  document.getElementById("comment-input-wrap").style.display = currentUser ? "block" : "none";
-  document.getElementById("comment-login-hint").style.display = currentUser ? "none" : "block";
-
+  document.getElementById("comment-input-wrap").style.display = "block";
+  document.getElementById("comment-login-hint").style.display = "none";
   await loadCommentsForModal(projectId);
   openModal("comments-modal");
 }
@@ -638,16 +617,9 @@ async function openCommentsModal(projectId, title) {
 async function loadCommentsForModal(projectId) {
   const el = document.getElementById("comments-modal-list");
   el.innerHTML = `<p style="color:var(--text-muted);text-align:center">Yükleniyor...</p>`;
-
-  const q    = query(collection(db, "comments"), orderBy("timestamp", "asc"));
-  const snap = await getDocs(q);
+  const snap = await getDocs(query(collection(db, "comments"), orderBy("timestamp", "asc")));
   const comments = snap.docs.filter(d => d.data().projectId === projectId);
-
-  if (!comments.length) {
-    el.innerHTML = `<p style="color:var(--text-muted);text-align:center;padding:1.5rem">Henüz yorum yok. İlk yorumu yap!</p>`;
-    return;
-  }
-
+  if (!comments.length) { el.innerHTML = `<p style="color:var(--text-muted);text-align:center;padding:1.5rem">Henüz yorum yok. İlk yorumu yap!</p>`; return; }
   el.innerHTML = comments.map(d => {
     const c = d.data();
     const isOwner = currentUser && currentUser.uid === c.uid;
@@ -661,10 +633,7 @@ async function loadCommentsForModal(projectId) {
           </div>
           <p class="comment-text">${c.text}</p>
         </div>
-        ${isOwner ? `<button onclick="deleteCommentFromModal('${d.id}', '${projectId}')" 
-          style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:0.8rem;padding:4px">
-          <i class="fas fa-trash"></i>
-        </button>` : ''}
+        ${isOwner ? `<button onclick="deleteCommentFromModal('${d.id}', '${projectId}')" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:0.8rem;padding:4px"><i class="fas fa-trash"></i></button>` : ''}
       </div>`;
   }).join("");
 }
@@ -674,17 +643,11 @@ async function addCommentFromModal() {
   const input = document.getElementById("comment-input-modal");
   const text  = input.value.trim();
   if (!text) { showToast("Yorum boş olamaz!", "error"); return; }
-
   await addDoc(collection(db, "comments"), {
-    projectId: activeCommentProjectId,
-    text,
-    uid:    currentUser.uid,
-    name:   currentUser.displayName || "Anonim",
-    avatar: currentUser.photoURL || "",
-    timestamp: Date.now(),
-    date:   new Date().toLocaleDateString("tr-TR")
+    projectId: activeCommentProjectId, text, uid: currentUser.uid,
+    name: currentUser.displayName || "Anonim", avatar: currentUser.photoURL || "",
+    timestamp: Date.now(), date: new Date().toLocaleDateString("tr-TR")
   });
-
   input.value = "";
   await loadCommentsForModal(activeCommentProjectId);
   await loadProjectsFromFirestore();
@@ -699,160 +662,17 @@ async function deleteCommentFromModal(commentId, projectId) {
   showToast("Yorum silindi.", "info");
 }
 
-/* ===== ADMIN CEVAP VER ===== */
-async function replyMessage(msgId) {
-  const input = document.getElementById(`reply-input-${msgId}`);
-  const text  = input.value.trim();
-  if (!text) { showToast("Cevap boş olamaz!", "error"); return; }
-  try {
-    await addDoc(collection(db, "messages", msgId, "replies"), {
-      text,
-      from:      "admin",
-      name:      "Umut Development",
-      timestamp: Date.now(),
-      date:      new Date().toLocaleDateString("tr-TR"),
-      readByUser: false
-    });
-    await updateDoc(doc(db, "messages", msgId), { read: true, hasReply: true });
-    input.value = "";
-    showToast("Cevap gönderildi! ✅", "success");
-    renderMessages();
-  } catch(e) {
-    showToast("Cevap gönderilemedi!", "error");
-  }
-}
-
-/* ===== GELEN KUTUSUNU RENDER ET (Kullanıcı) ===== */
-async function renderInbox() {
-  if (!currentUser) return;
-  const el = document.getElementById("inbox-list");
-  el.innerHTML = `<p style="color:var(--text-muted)">Yükleniyor...</p>`;
-
-  try {
-    const q = query(collection(db, "messages"), orderBy("timestamp", "desc"));
-    const snap = await getDocs(q);
-
-    /* Sadece bu kullanıcının mesajlarını filtrele */
-    const myMsgs = snap.docs.filter(d => d.data().uid === currentUser.uid);
-
-    if (!myMsgs.length) {
-      el.innerHTML = `<p style="color:var(--text-muted);text-align:center;padding:2rem">Henüz mesajın yok.</p>`;
-      return;
-    }
-
-    /* Her mesaj için cevapları da çek */
-    const msgHtmlArr = await Promise.all(myMsgs.map(async d => {
-      const m = d.data();
-      const repliesSnap = await getDocs(
-        query(collection(db, "messages", d.id, "replies"), orderBy("timestamp","asc"))
-      );
-
-      /* Cevapları okundu olarak işaretle */
-      repliesSnap.docs.forEach(async r => {
-        if (!r.data().readByUser) {
-          await updateDoc(doc(db, "messages", d.id, "replies", r.id), { readByUser: true });
-        }
-      });
-
-      const repliesHtml = repliesSnap.docs.map(r => {
-        const rep = r.data();
-        return `
-          <div style="display:flex;justify-content:flex-start;margin-top:0.6rem;">
-            <div style="background:var(--blue-light);border-radius:12px 12px 12px 0;padding:0.6rem 1rem;max-width:80%;">
-              <p style="font-size:0.75rem;font-weight:700;color:var(--blue-primary);margin-bottom:0.2rem">${rep.name}</p>
-              <p style="font-size:0.85rem;color:var(--text)">${rep.text}</p>
-              <p style="font-size:0.7rem;color:var(--text-muted);margin-top:0.2rem">${rep.date}</p>
-            </div>
-          </div>`;
-      }).join("");
-
-      return `
-        <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:1rem;margin-bottom:1rem;">
-          <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:0.3rem;margin-bottom:0.5rem;">
-            <strong style="font-family:var(--font-display)">${m.subject}</strong>
-            <span style="font-size:0.75rem;color:var(--text-muted)">${m.date}</span>
-          </div>
-
-          <!-- Kullanıcının mesajı — sağda -->
-          <div style="display:flex;justify-content:flex-end;margin-bottom:0.3rem;">
-            <div style="background:var(--blue-primary);border-radius:12px 12px 0 12px;padding:0.6rem 1rem;max-width:80%;">
-              <p style="font-size:0.85rem;color:white">${m.body}</p>
-              <p style="font-size:0.7rem;color:rgba(255,255,255,0.7);margin-top:0.2rem">${m.date}</p>
-            </div>
-          </div>
-
-          <!-- Admin cevapları — solda -->
-          ${repliesHtml || `<p style="font-size:0.82rem;color:var(--text-muted);text-align:center;padding:0.5rem">Henüz cevap verilmedi...</p>`}
-        </div>`;
-    }));
-
-    el.innerHTML = msgHtmlArr.join("");
-
-    /* Badge'i sıfırla */
-    document.getElementById("notif-badge").style.display = "none";
-
-  } catch(e) {
-    el.innerHTML = `<p style="color:#ef4444">Yüklenemedi.</p>`;
-  }
-}
-
-/* ===== CEVAP BİLDİRİMİ DİNLE (Kullanıcı) ===== */
-function listenForReplies(uid) {
-  const q = query(collection(db, "messages"), orderBy("timestamp","desc"));
-  onSnapshot(q, async snap => {
-    const myMsgs = snap.docs.filter(d => d.data().uid === uid);
-    let unreadReplies = 0;
-
-    await Promise.all(myMsgs.map(async d => {
-      const repliesSnap = await getDocs(
-        collection(db, "messages", d.id, "replies")
-      );
-      repliesSnap.docs.forEach(r => {
-        if (!r.data().readByUser) unreadReplies++;
-      });
-    }));
-
-    const badge = document.getElementById("notif-badge");
-    if (unreadReplies > 0) {
-      badge.textContent = unreadReplies;
-      badge.style.display = "flex";
-    } else {
-      badge.style.display = "none";
-    }
-  });
-}
-
-/* Projelere beğeni, favori ve yorum sayılarını ekle */
-async function enrichProjects(rawProjects) {
-  const uid = currentUser ? currentUser.uid : null;
-
-  const [likesSnap, favsSnap, commentsSnap] = await Promise.all([
-    getDocs(collection(db, "likes")),
-    getDocs(collection(db, "favorites")),
-    getDocs(collection(db, "comments"))
-  ]);
-
-  return rawProjects.map(p => {
-    const likes     = likesSnap.docs.filter(d => d.data().projectId === p.id);
-    const favs      = favsSnap.docs.filter(d => d.data().projectId === p.id);
-    const comments  = commentsSnap.docs.filter(d => d.data().projectId === p.id);
-
-    return {
-      ...p,
-      likeCount:    likes.length,
-      favCount:     favs.length,
-      commentCount: comments.length,
-      likedByMe:    uid ? likes.some(d => d.data().uid === uid) : false,
-      favoritedByMe:uid ? favs.some(d => d.data().uid === uid) : false,
-    };
-  });
-}
-
+/* =============================================================
+   YOUTUBE ID
+============================================================= */
 function extractYoutubeId(url) {
   const m = url.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([^&\n?#]+)/);
   return m ? m[1] : null;
 }
 
+/* =============================================================
+   FİLTRELEME
+============================================================= */
 function filterCat(cat, btn) {
   activeFilter = cat; activeSubFilter = "web-all";
   document.querySelectorAll(".cat-tab").forEach(b => b.classList.remove("active"));
@@ -870,21 +690,21 @@ function filterSubCat(sub, btn) {
   renderProjects();
 }
 
+/* =============================================================
+   GİRİŞ LOGLARI
+============================================================= */
 function renderLogs() {
   const tbody = document.getElementById("log-tbody");
-  if (!loginLogs.length) {
-    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:2rem">Henüz başarısız giriş yok.</td></tr>`;
-    return;
-  }
+  if (!loginLogs.length) { tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:2rem">Henüz başarısız giriş yok.</td></tr>`; return; }
   tbody.innerHTML = loginLogs.map((l,i) => `
-    <tr>
-      <td>${i+1}</td>
-      <td>${l.time}</td>
-      <td><code style="color:var(--blue-primary)">${l.user}</code></td>
-      <td><code style="color:#ef4444">${"•".repeat(Math.min(l.pass.length,12))}</code></td>
-    </tr>`).join("");
+    <tr><td>${i+1}</td><td>${l.time}</td>
+    <td><code style="color:var(--blue-primary)">${l.user}</code></td>
+    <td><code style="color:#ef4444">${"•".repeat(Math.min(l.pass.length,12))}</code></td></tr>`).join("");
 }
 
+/* =============================================================
+   ADMİN PROJE LİSTESİ
+============================================================= */
 function renderAdminProjectList() {
   const el = document.getElementById("admin-project-list");
   if (!projects.length) { el.innerHTML = `<p style="color:var(--text-muted)">Henüz proje yok.</p>`; return; }
@@ -895,60 +715,33 @@ function renderAdminProjectList() {
           <strong style="font-family:var(--font-display)">${p.title}</strong>
           <span style="font-size:0.78rem;color:var(--text-muted);margin-left:10px">${p.date}</span>
         </div>
-<div style="display:flex;gap:0.5rem;">
-  <button class="btn btn-sm" style="background:var(--blue-light);color:var(--blue-primary);border:none;border-radius:8px"
-    onclick="openEditModal('${p.id}')">
-    <i class="fas fa-edit"></i> Düzenle
-  </button>
-  <button class="btn btn-sm" style="background:#fee2e2;color:#ef4444;border:none;border-radius:8px"
-    onclick="deleteProject('${p.id}')">
-    <i class="fas fa-trash"></i> Sil
-  </button>
-</div>
+        <div style="display:flex;gap:0.5rem;">
+          <button class="btn btn-sm" style="background:var(--blue-light);color:var(--blue-primary);border:none;border-radius:8px" onclick="openEditModal('${p.id}')"><i class="fas fa-edit"></i> Düzenle</button>
+          <button class="btn btn-sm" style="background:#fee2e2;color:#ef4444;border:none;border-radius:8px" onclick="deleteProject('${p.id}')"><i class="fas fa-trash"></i> Sil</button>
+        </div>
       </div>
-      <!-- Moderasyon butonları -->
       <div style="display:flex;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap;">
-        <button class="btn btn-sm" style="background:var(--blue-light);color:var(--blue-primary);border:none;border-radius:8px"
-          onclick="adminViewComments('${p.id}', '${p.title}')">
-          <i class="fas fa-comments"></i> Yorumlar
-          <span style="font-size:0.75rem;opacity:0.8">(${p.commentCount || 0})</span>
-        </button>
-        <button class="btn btn-sm" style="background:#fef9ee;color:#d97706;border:none;border-radius:8px"
-          onclick="adminResetLikes('${p.id}')">
-          <i class="fas fa-heart-broken"></i> Beğenileri Sıfırla
-          <span style="font-size:0.75rem;opacity:0.8">(${p.likeCount || 0})</span>
-        </button>
-        <button class="btn btn-sm" style="background:#f0fdf4;color:#16a34a;border:none;border-radius:8px"
-          onclick="adminResetFavorites('${p.id}')">
-          <i class="fas fa-bookmark"></i> Favorileri Sıfırla
-          <span style="font-size:0.75rem;opacity:0.8">(${p.favCount || 0})</span>
-        </button>
+        <button class="btn btn-sm" style="background:var(--blue-light);color:var(--blue-primary);border:none;border-radius:8px" onclick="adminViewComments('${p.id}', '${p.title}')"><i class="fas fa-comments"></i> Yorumlar (${p.commentCount || 0})</button>
+        <button class="btn btn-sm" style="background:#fef9ee;color:#d97706;border:none;border-radius:8px" onclick="adminResetLikes('${p.id}')"><i class="fas fa-heart-broken"></i> Beğenileri Sıfırla (${p.likeCount || 0})</button>
+        <button class="btn btn-sm" style="background:#f0fdf4;color:#16a34a;border:none;border-radius:8px" onclick="adminResetFavorites('${p.id}')"><i class="fas fa-bookmark"></i> Favorileri Sıfırla (${p.favCount || 0})</button>
       </div>
     </div>`).join("");
 }
 
-/* ===== ADMİN YORUM YÖNETİMİ ===== */
+/* =============================================================
+   ADMİN YORUM YÖNETİMİ
+============================================================= */
 async function adminViewComments(projectId, title) {
   document.getElementById("admin-comments-title").textContent = title + " — Yorumlar";
   const el = document.getElementById("admin-comments-list");
   el.innerHTML = `<p style="color:var(--text-muted)">Yükleniyor...</p>`;
   openModal("admin-comments-modal");
-
-  const q    = query(collection(db, "comments"), orderBy("timestamp", "asc"));
-  const snap = await getDocs(q);
+  const snap     = await getDocs(query(collection(db, "comments"), orderBy("timestamp", "asc")));
   const comments = snap.docs.filter(d => d.data().projectId === projectId);
-
-  if (!comments.length) {
-    el.innerHTML = `<p style="color:var(--text-muted);text-align:center;padding:1.5rem">Bu projede henüz yorum yok.</p>`;
-    return;
-  }
-
+  if (!comments.length) { el.innerHTML = `<p style="color:var(--text-muted);text-align:center;padding:1.5rem">Bu projede henüz yorum yok.</p>`; return; }
   el.innerHTML = `
     <div style="display:flex;justify-content:flex-end;margin-bottom:1rem;">
-      <button class="btn btn-sm" style="background:#fee2e2;color:#ef4444;border:none"
-        onclick="adminDeleteAllComments('${projectId}')">
-        <i class="fas fa-trash"></i> Tüm Yorumları Sil
-      </button>
+      <button class="btn btn-sm" style="background:#fee2e2;color:#ef4444;border:none" onclick="adminDeleteAllComments('${projectId}')"><i class="fas fa-trash"></i> Tüm Yorumları Sil</button>
     </div>` +
     comments.map(d => {
       const c = d.data();
@@ -957,15 +750,11 @@ async function adminViewComments(projectId, title) {
           <img class="comment-avatar" src="${c.avatar || ''}" onerror="this.style.display='none'" alt=""/>
           <div style="flex:1">
             <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.3rem;">
-              <span class="comment-name">${c.name || 'Anonim'}</span>
-              <span class="comment-date">${c.date}</span>
+              <span class="comment-name">${c.name || 'Anonim'}</span><span class="comment-date">${c.date}</span>
             </div>
             <p class="comment-text">${c.text}</p>
           </div>
-          <button onclick="adminDeleteComment('${d.id}', '${projectId}', '${title}')"
-            style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:0.85rem;padding:4px;flex-shrink:0">
-            <i class="fas fa-trash"></i>
-          </button>
+          <button onclick="adminDeleteComment('${d.id}', '${projectId}', '${title}')" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:0.85rem;padding:4px;flex-shrink:0"><i class="fas fa-trash"></i></button>
         </div>`;
     }).join("");
 }
@@ -994,76 +783,51 @@ async function adminResetLikes(projectId) {
   const toDelete = snap.docs.filter(d => d.data().projectId === projectId);
   await Promise.all(toDelete.map(d => deleteDoc(doc(db, "likes", d.id))));
   showToast(`${toDelete.length} beğeni sıfırlandı.`, "info");
-  await loadProjectsFromFirestore();
-  renderAdminProjectList();
+  await loadProjectsFromFirestore(); renderAdminProjectList();
 }
 
-async function adminDeleteMessage(msgId) {
-  if (!confirm("Bu mesajı silmek istediğinden emin misin?")) return;
-  try {
-    await deleteDoc(doc(db, "messages", msgId));
-    showToast("Mesaj silindi.", "info");
-    renderMessages();
-  } catch(e) {
-    showToast("Silme başarısız!", "error");
-  }
+async function adminResetFavorites(projectId) {
+  if (!confirm("Bu projenin TÜM favorilerini sıfırlamak istediğinden emin misin?")) return;
+  const snap = await getDocs(collection(db, "favorites"));
+  const toDelete = snap.docs.filter(d => d.data().projectId === projectId);
+  await Promise.all(toDelete.map(d => deleteDoc(doc(db, "favorites", d.id))));
+  showToast(`${toDelete.length} favori sıfırlandı.`, "info");
+  await loadProjectsFromFirestore(); renderAdminProjectList();
 }
 
-/* Düzenleme modalında seçili kategori */
-let editCat    = null;
-let editSubCat = null;
-let editVideoMode = "url";
+/* =============================================================
+   PROJE DÜZENLEME
+============================================================= */
+let editCat = null, editSubCat = null, editVideoMode = "url";
 
 function openEditModal(projectId) {
   const p = projects.find(pr => pr.id === projectId);
   if (!p) return;
-
-  /* Mevcut değerleri doldur */
   document.getElementById("edit-project-id").value = projectId;
   document.getElementById("edit-title").value       = p.title || "";
   document.getElementById("edit-desc").value        = p.desc  || "";
   document.getElementById("edit-video-url").value   = p.videoUrl || "";
   document.getElementById("edit-file").value        = "";
   document.getElementById("edit-code").value        = "";
-
-  /* Mevcut görseli göster */
-  const imgWrap = document.getElementById("edit-current-img");
-  imgWrap.innerHTML = p.fileUrl
-    ? `<img src="${p.fileUrl}" style="height:60px;border-radius:8px;object-fit:cover"/> <span style="font-size:0.78rem;color:var(--text-muted)">Mevcut görsel</span>`
-    : "";
-
-  /* Mevcut kod dosyasını göster */
-  document.getElementById("edit-current-code").textContent = p.codeName
-    ? `📁 Mevcut: ${p.codeName}`
-    : "";
-
-  /* Kategori seç */
-  editCat    = p.cat;
-  editSubCat = p.subCat || null;
+  document.getElementById("edit-current-img").innerHTML  = p.fileUrl ? `<img src="${p.fileUrl}" style="height:60px;border-radius:8px;object-fit:cover"/> <span style="font-size:0.78rem;color:var(--text-muted)">Mevcut görsel</span>` : "";
+  document.getElementById("edit-current-code").textContent = p.codeName ? `📁 Mevcut: ${p.codeName}` : "";
+  editCat = p.cat; editSubCat = p.subCat || null;
   document.querySelectorAll("#edit-modal .cat-btn").forEach(b => b.classList.remove("selected"));
   const catBtn = document.getElementById(`edit-cat-${p.cat}`);
   if (catBtn) catBtn.classList.add("selected");
-
   if (p.cat === "web") {
     document.getElementById("edit-subcat-wrap").style.display = "block";
     const subBtn = document.getElementById(`edit-sub-${p.subCat}`);
     if (subBtn) subBtn.classList.add("selected");
-  } else {
-    document.getElementById("edit-subcat-wrap").style.display = "none";
-  }
-
-  /* Video modu */
+  } else { document.getElementById("edit-subcat-wrap").style.display = "none"; }
   editVideoMode = p.videoUrl ? "url" : p.vidUrl ? "file" : "url";
   switchEditVideoTab(editVideoMode, document.getElementById(`edit-video-tab-${editVideoMode}`));
-
   openModal("edit-modal");
 }
 
 function selectEditCat(cat, btn) {
   editCat = cat; editSubCat = null;
-  document.querySelectorAll("#edit-modal .cat-btn").forEach(b => {
-    if (!b.getAttribute("onclick").includes("SubCat")) b.classList.remove("selected");
-  });
+  document.querySelectorAll("#edit-modal .cat-btn").forEach(b => { if (!b.getAttribute("onclick").includes("SubCat")) b.classList.remove("selected"); });
   btn.classList.add("selected");
   document.getElementById("edit-subcat-wrap").style.display = cat === "web" ? "block" : "none";
   document.querySelectorAll("#edit-modal #edit-subcat-wrap .cat-btn").forEach(b => b.classList.remove("selected"));
@@ -1092,177 +856,54 @@ async function updateProject() {
   const videoFile = document.getElementById("edit-video-file").files[0];
   const codeFile  = document.getElementById("edit-code").files[0];
 
-  if (!title)    { showToast("Başlık boş olamaz!", "error"); return; }
-  if (!editCat)  { showToast("Kategori seçmelisin!", "error"); return; }
+  if (!title)   { showToast("Başlık boş olamaz!", "error"); return; }
+  if (!editCat) { showToast("Kategori seçmelisin!", "error"); return; }
   if (editCat === "web" && !editSubCat) { showToast("Alt kategori seçmelisin!", "error"); return; }
 
   showToast("Güncelleniyor... ⏳", "info");
-
   try {
     const p = projects.find(pr => pr.id === projectId);
-    let fileUrl  = p.fileUrl  || null;
-    let vidUrl   = p.vidUrl   || null;
-    let codeData = p.codeData || null;
-    let codeName = p.codeName || null;
-    let codeIsText = p.codeIsText || false;
+    let fileUrl = p.fileUrl || null, vidUrl = p.vidUrl || null;
+    let codeData = p.codeData || null, codeName = p.codeName || null, codeIsText = p.codeIsText || false;
 
-    /* Yeni görsel yüklendiyse Cloudinary'ye at */
-    if (imgFile) {
-      showToast("Görsel yükleniyor... ⏳", "info");
-      fileUrl = await uploadToCloudinary(imgFile, "image");
-    }
+    if (imgFile) { showToast("Görsel yükleniyor... ⏳", "info"); fileUrl = await uploadToCloudinary(imgFile, "image"); }
 
-    /* Video modu */
     let finalVideoUrl = null;
-    if (editVideoMode === "url") {
-      finalVideoUrl = videoUrl;
-      vidUrl = null;
-    } else if (editVideoMode === "file" && videoFile) {
-      showToast("Video yükleniyor... ⏳", "info");
-      vidUrl = await uploadToCloudinary(videoFile, "video");
-      finalVideoUrl = null;
-    } else if (editVideoMode === "none") {
-      vidUrl = null;
-      finalVideoUrl = null;
-    } else {
-      finalVideoUrl = p.videoUrl || null;
-    }
+    if      (editVideoMode === "url")               { finalVideoUrl = videoUrl; vidUrl = null; }
+    else if (editVideoMode === "file" && videoFile) { showToast("Video yükleniyor... ⏳", "info"); vidUrl = await uploadToCloudinary(videoFile, "video"); finalVideoUrl = null; }
+    else if (editVideoMode === "none")              { vidUrl = null; finalVideoUrl = null; }
+    else                                            { finalVideoUrl = p.videoUrl || null; }
 
-    /* Yeni kod dosyası yüklendiyse */
     if (codeFile) {
       codeName = codeFile.name;
       const isText = /\.(py|ino|js|ts|cpp|c|h|java|html|css|json|txt|md)$/i.test(codeFile.name);
       codeIsText = isText;
-      if (isText) {
-        codeData = await new Promise(res => {
-          const r = new FileReader();
-          r.onload = e => res(e.target.result);
-          r.readAsText(codeFile);
-        });
-      } else {
-        codeData = await uploadToCloudinary(codeFile, "raw");
-      }
+      if (isText) { codeData = await new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result); r.readAsText(codeFile); }); }
+      else        { codeData = await uploadToCloudinary(codeFile, "raw"); }
     }
 
-    /* Firestore'u güncelle */
-    await updateDoc(doc(db, "projects", projectId), {
-      title,
-      desc,
-      fileUrl,
-      videoUrl:   finalVideoUrl,
-      vidUrl,
-      codeData,
-      codeName,
-      codeIsText,
-      cat:        editCat,
-      subCat:     editSubCat,
-    });
-
+    await updateDoc(doc(db, "projects", projectId), { title, desc, fileUrl, videoUrl: finalVideoUrl, vidUrl, codeData, codeName, codeIsText, cat: editCat, subCat: editSubCat });
     closeModal("edit-modal");
-    await loadProjectsFromFirestore();
-    renderAdminProjectList();
+    await loadProjectsFromFirestore(); renderAdminProjectList();
     showToast("Proje güncellendi! ✅", "success");
-
-  } catch(e) {
-    console.error("Güncelleme hatası:", e);
-    showToast("Güncelleme başarısız: " + e.message, "error");
-  }
+  } catch(e) { console.error("Güncelleme hatası:", e); showToast("Güncelleme başarısız: " + e.message, "error"); }
 }
 
-
+/* =============================================================
+   PROJE SİL
+============================================================= */
 async function deleteProject(id) {
   if (!confirm("Bu projeyi silmek istediğinden emin misin?")) return;
   try {
     await deleteDoc(doc(db, "projects", id));
-    await loadProjectsFromFirestore();
-    renderAdminProjectList();
+    await loadProjectsFromFirestore(); renderAdminProjectList();
     showToast("Proje silindi.", "info");
-  } catch(e) {
-    showToast("Silme işlemi başarısız!", "error");
-  }
+  } catch(e) { showToast("Silme işlemi başarısız!", "error"); }
 }
-
-async function adminResetFavorites(projectId) {
-  if (!confirm("Bu projenin TÜM favorilerini sıfırlamak istediğinden emin misin?")) return;
-  const snap = await getDocs(collection(db, "favorites"));
-  const toDelete = snap.docs.filter(d => d.data().projectId === projectId);
-  await Promise.all(toDelete.map(d => deleteDoc(doc(db, "favorites", d.id))));
-  showToast(`${toDelete.length} favori sıfırlandı.`, "info");
-  await loadProjectsFromFirestore();
-  renderAdminProjectList();
-}
-
-function showToast(msg, type = "info") {
-  const icons = {success:"✅", error:"❌", info:"ℹ️"};
-  const t = document.createElement("div");
-  t.className = `toast ${type}`;
-  t.innerHTML = `${icons[type]} <span>${msg}</span>`;
-  document.getElementById("toast-container").appendChild(t);
-  setTimeout(() => t.remove(), 3500);
-}
-
-document.getElementById("login-pass").addEventListener("keydown", e => {
-  if (e.key === "Enter") attemptLogin();
-});
 
 /* =============================================================
-   GLOBAL FONKSİYONLAR
-   ES Module (import/export) kullanıldığı için HTML'deki
-   onclick="" çağrılarının çalışması için fonksiyonları
-   window objesine bağlamak gerekiyor.
+   KOD MODAL
 ============================================================= */
-
-window.adminViewComments     = adminViewComments;
-window.adminDeleteComment    = adminDeleteComment;
-window.adminDeleteAllComments= adminDeleteAllComments;
-window.adminResetLikes       = adminResetLikes;
-window.adminResetFavorites   = adminResetFavorites;
-window.deleteProject = deleteProject;
-window.adminDeleteMessage = adminDeleteMessage;
-
-window.openEditModal     = openEditModal;
-window.selectEditCat     = selectEditCat;
-window.selectEditSubCat  = selectEditSubCat;
-window.switchEditVideoTab= switchEditVideoTab;
-window.updateProject     = updateProject;
-
-window.openModal         = openModal;
-window.closeModal        = closeModal;
-window.attemptLogin      = attemptLogin;
-window.adminLogout       = adminLogout;
-window.switchAdminTab    = switchAdminTab;
-window.switchVideoTab    = switchVideoTab;
-window.selectAdminCat    = selectAdminCat;
-window.selectAdminSubCat = selectAdminSubCat;
-window.addProject        = addProject;
-window.deleteProject     = deleteProject;
-window.filterCat         = filterCat;
-window.filterSubCat      = filterSubCat;
-
-/* Sayfa açılınca Firestore'dan projeleri yükle */
-loadProjectsFromFirestore();
-
-/* =============================================================
-   HAMBİRGER MENÜ FONKSİYONLARI
-   Mobilde menü açma/kapama işlemleri
-============================================================= */
-function toggleMobileMenu() {
-  const menu = document.getElementById("mobile-menu");
-  const btn  = document.getElementById("hamburger");
-  menu.classList.toggle("open");
-  btn.classList.toggle("open");
-  /* Menü açıkken sayfa scroll'u engelle */
-  document.body.style.overflow = menu.classList.contains("open") ? "hidden" : "";
-}
-
-function closeMobileMenu() {
-  const menu = document.getElementById("mobile-menu");
-  const btn  = document.getElementById("hamburger");
-  menu.classList.remove("open");
-  btn.classList.remove("open");
-  document.body.style.overflow = "";
-}
-
 function showCodeModal(projectId) {
   const p = projects.find(pr => pr.id === projectId);
   if (!p || !p.codeData) return;
@@ -1291,12 +932,8 @@ function downloadCode(projectId) {
   const p = projects.find(pr => pr.id === projectId);
   if (!p || !p.codeData) return;
   const a = document.createElement("a");
-  if (p.codeIsText) {
-    const blob = new Blob([p.codeData], {type:"text/plain"});
-    a.href = URL.createObjectURL(blob);
-  } else {
-    a.href = p.codeData;
-  }
+  if (p.codeIsText) { const blob = new Blob([p.codeData], {type:"text/plain"}); a.href = URL.createObjectURL(blob); }
+  else { a.href = p.codeData; }
   a.download = p.codeName || "kaynak_kodu";
   a.click();
 }
@@ -1305,7 +942,45 @@ function escapeHtml(str) {
   return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
 
-/* ===== TÜM GLOBAL FONKSİYONLAR ===== */
+/* =============================================================
+   TOAST
+============================================================= */
+function showToast(msg, type = "info") {
+  const icons = {success:"✅", error:"❌", info:"ℹ️"};
+  const t = document.createElement("div");
+  t.className = `toast ${type}`;
+  t.innerHTML = `${icons[type]} <span>${msg}</span>`;
+  document.getElementById("toast-container").appendChild(t);
+  setTimeout(() => t.remove(), 3500);
+}
+
+/* =============================================================
+   HAMBİRGER MENÜ
+============================================================= */
+function toggleMobileMenu() {
+  const menu = document.getElementById("mobile-menu");
+  const btn  = document.getElementById("hamburger");
+  menu.classList.toggle("open"); btn.classList.toggle("open");
+  document.body.style.overflow = menu.classList.contains("open") ? "hidden" : "";
+}
+
+function closeMobileMenu() {
+  const menu = document.getElementById("mobile-menu");
+  const btn  = document.getElementById("hamburger");
+  menu.classList.remove("open"); btn.classList.remove("open");
+  document.body.style.overflow = "";
+}
+
+/* =============================================================
+   ENTER İLE GİRİŞ
+============================================================= */
+document.getElementById("login-pass").addEventListener("keydown", e => {
+  if (e.key === "Enter") attemptLogin();
+});
+
+/* =============================================================
+   GLOBAL FONKSİYONLAR
+============================================================= */
 window.openModal              = openModal;
 window.closeModal             = closeModal;
 window.attemptLogin           = attemptLogin;
@@ -1326,12 +1001,6 @@ window.googleLogin            = googleLogin;
 window.googleLogout           = googleLogout;
 window.toggleLike             = toggleLike;
 window.toggleFavorite         = toggleFavorite;
-window.addComment             = addComment;
-window.deleteComment          = deleteComment;
-window.sendMessage            = sendMessage;
-window.markRead               = markRead;
-window.replyMessage           = replyMessage;
-window.renderInbox            = renderInbox;
 window.openCommentsModal      = openCommentsModal;
 window.addCommentFromModal    = addCommentFromModal;
 window.deleteCommentFromModal = deleteCommentFromModal;
@@ -1340,3 +1009,20 @@ window.adminDeleteComment     = adminDeleteComment;
 window.adminDeleteAllComments = adminDeleteAllComments;
 window.adminResetLikes        = adminResetLikes;
 window.adminResetFavorites    = adminResetFavorites;
+window.openEditModal          = openEditModal;
+window.selectEditCat          = selectEditCat;
+window.selectEditSubCat       = selectEditSubCat;
+window.switchEditVideoTab     = switchEditVideoTab;
+window.updateProject          = updateProject;
+window.sendMessage            = sendMessage;
+window.sendMessageFromInbox   = sendMessageFromInbox;
+window.adminReply             = adminReply;
+window.blockUser              = blockUser;
+window.unblockUser            = unblockUser;
+window.adminDeleteConversation= adminDeleteConversation;
+window.hideNotifBanner        = hideNotifBanner;
+
+/* =============================================================
+   SAYFA AÇILINCA PROJELERİ YÜKLE
+============================================================= */
+loadProjectsFromFirestore();
