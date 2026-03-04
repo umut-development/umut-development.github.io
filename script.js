@@ -546,7 +546,7 @@ function renderProjects() {
       media = `<img src="${p.fileUrl}" alt="${p.title}" style="width:100%;height:100%;object-fit:cover;border-radius:0"/>`;
     }
 
-    const labels  = {iot:"🔌 IoT","web-full":"🌐 Web Sitesi","web-loading":"⏳ Yüklenme","web-login":"🔑 Giriş Ekranı"};
+    const labels  = {iot:"🔌 IoT","web-full":"🌐 Web Sitesi","web-loading":"⏳ Yüklenme","web-login":"🔑 Giriş Ekranı","web-shop":"🛒 Alış-Veriş"};
     const catKey   = p.cat === "iot" ? "iot" : p.subCat;
     const catLabel = labels[catKey] || "📁 Proje";
 
